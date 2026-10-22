@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Control Camilla</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; padding: 20px; background: #f4f4f4; }
+    button { font-size: 22px; padding: 18px 30px; margin: 10px; border: none;
+             border-radius: 10px; background: #2b7de9; color: white; cursor: pointer; }
+    button:active { background: #1a5bb5; }
+    #resultado { margin-top: 25px; font-size: 20px; padding: 15px; background: white;
+                 border-radius: 10px; display: inline-block; min-width: 280px; }
+    .ok { color: green; } .error { color: red; }
+  </style>
+</head>
+<body>
+  <h1>Control Camilla</h1>
+  <button onclick="enviar(1)">Boton 1</button>
+  <button onclick="enviar(2)">Boton 2</button>
+  <button onclick="enviar(3)">Boton 3</button>
+  <div id="resultado">Presiona un boton</div>
+
+  <script>
+    async function enviar(n) {
+      const r = document.getElementById("resultado");
+      r.className = "";
+      r.textContent = "Enviando " + n + "...";
+      try {
+        const datos = await (await fetch("/enviar/" + n)).json();
+        if (datos.ok) {
+          r.className = "ok";
+          r.textContent = "Enviado: " + datos.enviado + " → ESP32 respondio: " + datos.respuesta;
+        } else {
+          r.className = "error";
+          r.textContent = "Error: " + datos.error;
+        }
+      } catch (e) {
+        r.className = "error";
+        r.textContent = "No hay conexion con el servidor";
+      }
+    }
+  </script>
+</body>
+</html>
