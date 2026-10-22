@@ -1,5 +1,7 @@
-// ESP32: recibe "1", "2" o "3" por USB serial desde la Raspberry
+// ESP32: recibe "0", "1", "2" o "3" por USB serial desde la Raspberry
 // y responde una linea de texto para confirmar que lo recibio.
+// "0" = detener: la Raspberry lo manda cada vez que cambia quien tiene el control.
+// Guia para integrar los motores: esp32/GUIA_ESP32.md
 
 void setup() {
   Serial.begin(115200);
@@ -11,7 +13,11 @@ void loop() {
     String comando = Serial.readStringUntil('\n');
     comando.trim();
 
-    if (comando == "1") {
+    if (comando == "0") {
+      // Detener: aqui va el codigo que para todos los motores
+      digitalWrite(2, LOW);
+      Serial.println("OK 0 - detenido");
+    } else if (comando == "1") {
       digitalWrite(2, HIGH);
       Serial.println("OK 1 - LED encendido");
     } else if (comando == "2") {

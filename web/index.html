@@ -9,6 +9,14 @@
     button { font-size: 22px; padding: 18px 30px; margin: 10px; border: none;
              border-radius: 10px; background: #2b7de9; color: white; cursor: pointer; }
     button:active { background: #1a5bb5; }
+    button:disabled { background: #b8c2cc; cursor: not-allowed; }
+    #control { font-size: 20px; padding: 12px; border-radius: 10px; margin: 0 auto 10px;
+               max-width: 420px; background: #e4e4e4; }
+    #control.tuyo { background: #d6f5d6; } #control.otro { background: #ffe0bd; }
+    #tomar, #soltar, #confirmar button { font-size: 18px; padding: 12px 20px; }
+    #soltar, #cancelar { background: #777; }
+    #confirmar { background: white; border-radius: 10px; padding: 10px; margin: 0 auto;
+                 max-width: 420px; font-size: 18px; }
     #resultado { margin-top: 25px; font-size: 20px; padding: 15px; background: white;
                  border-radius: 10px; display: inline-block; min-width: 280px; }
     .ok { color: green; } .error { color: red; }
@@ -16,30 +24,115 @@
 </head>
 <body>
   <h1>Control Camilla</h1>
-  <button onclick="enviar(1)">Boton 1</button>
-  <button onclick="enviar(2)">Boton 2</button>
-  <button onclick="enviar(3)">Boton 3</button>
-  <div id="resultado">Presiona un boton</div>
+  <div id="control">Conectando...</div>
+  <button id="tomar" onclick="preguntar()" hidden>Tomar el control</button>
+  <button id="soltar" onclick="soltar()" hidden>Soltar el control</button>
+  <div id="confirmar" hidden>
+    <p id="pregunta"></p>
+    <button onclick="tomar()">Si, tomar el control</button>
+    <button id="cancelar" onclick="cancelar()">Cancelar</button>
+  </div>
+  <div>
+    <button class="cmd" onclick="enviar(1)" disabled>Boton 1</button>
+    <button class="cmd" onclick="enviar(2)" disabled>Boton 2</button>
+    <button class="cmd" onclick="enviar(3)" disabled>Boton 3</button>
+  </div>
+  <div id="resultado">Toma el control para usar los botones</div>
 
   <script>
-    async function enviar(n) {
+    // Identificador de esta pagina: el servidor solo acepta ordenes de quien tiene el control
+    let id;
+    try { id = sessionStorage.getItem("dispositivo"); } catch (e) {}
+    if (!id) {
+      id = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      try { sessionStorage.setItem("dispositivo", id); } catch (e) {}
+    }
+    let control = "";
+    let acciones = 0;  // cuenta tomar/soltar para ignorar consultas de estado que llegan tarde
+
+    async function pedir(ruta) {
+      return (await fetch(ruta, { headers: { "X-Dispositivo": id } })).json();
+    }
+
+    function avisar(clase, texto) {
       const r = document.getElementById("resultado");
-      r.className = "";
-      r.textContent = "Enviando " + n + "...";
+      r.className = clase;
+      r.textContent = texto;
+    }
+
+    // Muestra el estado: "tuyo", "otro", "libre" o "" (sin conexion con la Raspberry)
+    function mostrar(nuevo) {
+      if (control === "tuyo" && nuevo === "otro") avisar("error", "Otro dispositivo tomo el control");
+      if (control === "tuyo" && nuevo === "libre") avisar("error", "Perdiste el control por inactividad");
+      control = nuevo;
+      const c = document.getElementById("control");
+      c.className = nuevo;
+      c.textContent = { tuyo: "Tienes el control", otro: "Otro dispositivo tiene el control",
+                        libre: "Nadie tiene el control" }[nuevo] || "Sin conexion con la Raspberry";
+      document.getElementById("tomar").hidden = nuevo === "tuyo" || nuevo === "";
+      document.getElementById("soltar").hidden = nuevo !== "tuyo";
+      document.querySelectorAll(".cmd").forEach(b => b.disabled = nuevo !== "tuyo");
+    }
+
+    function preguntar() {
+      document.getElementById("pregunta").textContent = control === "otro"
+        ? "Otro dispositivo tiene el control. Si lo tomas, quedara bloqueado. ¿Tomar el control?"
+        : "¿Quieres tomar el control de la camilla?";
+      document.getElementById("confirmar").hidden = false;
+    }
+
+    function cancelar() {
+      document.getElementById("confirmar").hidden = true;
+    }
+
+    async function tomar() {
+      cancelar();
+      acciones++;
       try {
-        const datos = await (await fetch("/enviar/" + n)).json();
-        if (datos.ok) {
-          r.className = "ok";
-          r.textContent = "Enviado: " + datos.enviado + " → ESP32 respondio: " + datos.respuesta;
-        } else {
-          r.className = "error";
-          r.textContent = "Error: " + datos.error;
-        }
+        mostrar((await pedir("/tomar")).control);
+        avisar("ok", "Tienes el control");
       } catch (e) {
-        r.className = "error";
-        r.textContent = "No hay conexion con el servidor";
+        avisar("error", "No hay conexion con el servidor");
       }
     }
+
+    async function soltar() {
+      acciones++;
+      try {
+        mostrar((await pedir("/soltar")).control);
+        avisar("", "Soltaste el control");
+      } catch (e) {
+        avisar("error", "No hay conexion con el servidor");
+      }
+    }
+
+    async function enviar(n) {
+      avisar("", "Enviando " + n + "...");
+      try {
+        const datos = await pedir("/enviar/" + n);
+        if (datos.control) mostrar(datos.control);
+        if (datos.ok) {
+          avisar("ok", "Enviado: " + datos.enviado + " → ESP32 respondio: " + datos.respuesta);
+        } else {
+          avisar("error", "Error: " + datos.error);
+        }
+      } catch (e) {
+        avisar("error", "No hay conexion con el servidor");
+      }
+    }
+
+    // Preguntar al servidor quien tiene el control cada segundo y medio
+    async function actualizar() {
+      const antes = acciones;
+      try {
+        const datos = await pedir("/estado");
+        if (antes === acciones) mostrar(datos.control);
+      } catch (e) {
+        if (antes === acciones) mostrar("");
+      }
+    }
+    actualizar();
+    setInterval(actualizar, 1500);
   </script>
 </body>
 </html>

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Servidor web sencillo: 3 botones que envian comandos al ESP32 por USB serial
-y muestran la respuesta que devuelve el ESP32.
+y muestran la respuesta que devuelve el ESP32. Solo un dispositivo (el que tiene
+el control) puede mandar ordenes a la vez.
 
 Uso:  python3 servidor.py            (busca /dev/ttyUSB0 o /dev/ttyACM0)
       PUERTO=/dev/ttyUSB1 python3 servidor.py
@@ -13,6 +14,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import serial
 
@@ -21,11 +23,15 @@ PUERTO_WEB = 8000
 IP_RED = "10.42.0.1"  # IP de la Raspberry en su propia red WiFi "Camilla"
 TIMEOUT_RESPUESTA = 2  # segundos esperando la respuesta del ESP32
 COMANDOS_VALIDOS = {"1", "2", "3"}
+COMANDO_DETENER = "0"  # se manda al ESP32 cada vez que cambia quien tiene el control
+TIEMPO_LIBERAR = 60  # segundos sin noticias de la pagina que tiene el control para liberarlo
 
 HTML = (Path(__file__).parent / "index.html").read_bytes()
 
 esp = None
-candado = threading.Lock()
+candado = threading.RLock()  # una cosa a la vez: el puerto serial y el control
+dueno = None  # identificador de la pagina que tiene el control (None = libre)
+visto = 0.0  # ultima vez que esa pagina se comunico
 
 
 def buscar_puerto():
@@ -56,6 +62,37 @@ def enviar(comando):
     return respuesta
 
 
+def enviar_seguro(comando):
+    """Como enviar(), pero devuelve (respuesta, error) en vez de lanzar excepciones."""
+    global esp
+    try:
+        return enviar(comando), None
+    except Exception as e:
+        esp = None  # forzar reconexion en el siguiente intento
+        return None, str(e)
+
+
+def cambiar_dueno(nuevo):
+    """Cambia quien tiene el control; si alguien lo pierde, detiene la camilla."""
+    global dueno, visto
+    anterior, dueno, visto = dueno, nuevo, time.monotonic()
+    if anterior is not None and anterior != nuevo:
+        enviar_seguro(COMANDO_DETENER)
+
+
+def estado_control(dispositivo):
+    """'tuyo', 'otro' o 'libre'. Libera el control si su pagina dejo de comunicarse."""
+    global visto
+    if dueno is not None and time.monotonic() - visto > TIEMPO_LIBERAR:
+        cambiar_dueno(None)
+    if dueno is None:
+        return "libre"
+    if dueno == dispositivo:
+        visto = time.monotonic()
+        return "tuyo"
+    return "otro"
+
+
 class Manejador(BaseHTTPRequestHandler):
     def do_GET(self):
         # Portal tipo "WiFi de hotel": en la red Camilla los celulares preguntan a
@@ -69,25 +106,53 @@ class Manejador(BaseHTTPRequestHandler):
             self.end_headers()
             return
 
-        if self.path == "/":
+        ruta = urlsplit(self.path).path
+        dispositivo = self.headers.get("X-Dispositivo", "")  # lo manda la pagina
+
+        if ruta == "/":
             self.responder(200, HTML, "text/html; charset=utf-8")
-        elif self.path.startswith("/enviar/"):
-            comando = self.path.rsplit("/", 1)[-1]
+        elif ruta == "/estado":
+            with candado:
+                control = estado_control(dispositivo)
+            self.json(200, {"control": control})
+        elif ruta == "/tomar":
+            if not dispositivo:
+                return self.json(400, {"error": "Falta el identificador del dispositivo"})
+            with candado:
+                estado_control(dispositivo)  # libera el control si estaba abandonado
+                cambiar_dueno(dispositivo)
+            self.json(200, {"control": "tuyo"})
+        elif ruta == "/soltar":
+            with candado:
+                if estado_control(dispositivo) == "tuyo":
+                    cambiar_dueno(None)
+                control = estado_control(dispositivo)
+            self.json(200, {"control": control})
+        elif ruta.startswith("/enviar/"):
+            comando = ruta.rsplit("/", 1)[-1]
             if comando not in COMANDOS_VALIDOS:
                 return self.json(400, {"ok": False, "error": "Comando invalido"})
-            try:
-                respuesta = enviar(comando)
-            except Exception as e:
-                global esp
-                esp = None  # forzar reconexion en el siguiente intento
-                return self.json(500, {"ok": False, "error": str(e)})
-            if respuesta:
-                self.json(200, {"ok": True, "enviado": comando, "respuesta": respuesta})
+            with candado:
+                control = estado_control(dispositivo)
+                if control == "tuyo":
+                    respuesta, error = enviar_seguro(comando)
+            if control != "tuyo":
+                return self.json(403, {"ok": False, "control": control,
+                                       "error": "No tienes el control"})
+            if error:
+                self.json(500, {"ok": False, "control": control, "error": error})
+            elif respuesta:
+                self.json(200, {"ok": True, "control": control, "enviado": comando,
+                                "respuesta": respuesta})
             else:
-                self.json(200, {"ok": False, "enviado": comando,
+                self.json(200, {"ok": False, "control": control, "enviado": comando,
                                 "error": "El ESP32 no respondio (timeout)"})
         else:
             self.responder(404, b"No encontrado", "text/plain")
+
+    def log_request(self, code="-", size="-"):
+        if not self.path.startswith("/estado"):  # la pagina consulta /estado cada segundo
+            super().log_request(code, size)
 
     def json(self, codigo, datos):
         self.responder(codigo, json.dumps(datos).encode(), "application/json")
