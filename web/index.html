@@ -14,7 +14,8 @@
                max-width: 420px; background: #e4e4e4; }
     #control.tuyo { background: #d6f5d6; } #control.otro { background: #ffe0bd; }
     #tomar, #soltar, #confirmar button { font-size: 18px; padding: 12px 20px; }
-    #soltar, #cancelar { background: #777; }
+    #soltar, #cancelar, #salir { background: #777; }
+    #salir { font-size: 14px; padding: 6px 12px; margin: 0 0 0 8px; }
     #confirmar { background: white; border-radius: 10px; padding: 10px; margin: 0 auto;
                  max-width: 420px; font-size: 18px; }
     #resultado { margin-top: 25px; font-size: 20px; padding: 15px; background: white;
@@ -24,6 +25,7 @@
 </head>
 <body>
   <h1>Control Camilla</h1>
+  <p>Hola, <b id="nombre"></b> <button id="salir" onclick="salir()">Salir</button></p>
   <div id="control">Conectando...</div>
   <button id="tomar" onclick="preguntar()" hidden>Tomar el control</button>
   <button id="soltar" onclick="soltar()" hidden>Soltar el control</button>
@@ -40,6 +42,11 @@
   <div id="resultado">Toma el control para usar los botones</div>
 
   <script>
+    // Nombre del inicio de sesion (llega en la direccion: /control?nombre=...). Sin nombre, volver a pedirlo
+    const nombre = (new URLSearchParams(location.search).get("nombre") || "").trim();
+    if (!nombre) location.replace("/");
+    document.getElementById("nombre").textContent = nombre;
+
     // Identificador de esta pagina: el servidor solo acepta ordenes de quien tiene el control
     let id;
     try { id = sessionStorage.getItem("dispositivo"); } catch (e) {}
@@ -48,10 +55,13 @@
       try { sessionStorage.setItem("dispositivo", id); } catch (e) {}
     }
     let control = "";
+    let quien = "";  // nombre de quien tiene el control
     let acciones = 0;  // cuenta tomar/soltar para ignorar consultas de estado que llegan tarde
 
     async function pedir(ruta) {
-      return (await fetch(ruta, { headers: { "X-Dispositivo": id } })).json();
+      // encodeURIComponent: los encabezados no aceptan acentos ni ñ
+      const headers = { "X-Dispositivo": id, "X-Nombre": encodeURIComponent(nombre) };
+      return (await fetch(ruta, { headers })).json();
     }
 
     function avisar(clase, texto) {
@@ -61,13 +71,14 @@
     }
 
     // Muestra el estado: "tuyo", "otro", "libre" o "" (sin conexion con la Raspberry)
-    function mostrar(nuevo) {
-      if (control === "tuyo" && nuevo === "otro") avisar("error", "Otro dispositivo tomo el control");
+    function mostrar(nuevo, nombreDueno) {
+      quien = nombreDueno || "Otro dispositivo";
+      if (control === "tuyo" && nuevo === "otro") avisar("error", quien + " tomo el control");
       if (control === "tuyo" && nuevo === "libre") avisar("error", "Perdiste el control por inactividad");
       control = nuevo;
       const c = document.getElementById("control");
       c.className = nuevo;
-      c.textContent = { tuyo: "Tienes el control", otro: "Otro dispositivo tiene el control",
+      c.textContent = { tuyo: "Tienes el control", otro: quien + " tiene el control",
                         libre: "Nadie tiene el control" }[nuevo] || "Sin conexion con la Raspberry";
       document.getElementById("tomar").hidden = nuevo === "tuyo" || nuevo === "";
       document.getElementById("soltar").hidden = nuevo !== "tuyo";
@@ -76,7 +87,7 @@
 
     function preguntar() {
       document.getElementById("pregunta").textContent = control === "otro"
-        ? "Otro dispositivo tiene el control. Si lo tomas, quedara bloqueado. ¿Tomar el control?"
+        ? quien + " tiene el control. Si lo tomas, quedara bloqueado. ¿Tomar el control?"
         : "¿Quieres tomar el control de la camilla?";
       document.getElementById("confirmar").hidden = false;
     }
@@ -89,7 +100,8 @@
       cancelar();
       acciones++;
       try {
-        mostrar((await pedir("/tomar")).control);
+        const datos = await pedir("/tomar");
+        mostrar(datos.control, datos.quien);
         avisar("ok", "Tienes el control");
       } catch (e) {
         avisar("error", "No hay conexion con el servidor");
@@ -99,18 +111,27 @@
     async function soltar() {
       acciones++;
       try {
-        mostrar((await pedir("/soltar")).control);
+        const datos = await pedir("/soltar");
+        mostrar(datos.control, datos.quien);
         avisar("", "Soltaste el control");
       } catch (e) {
         avisar("error", "No hay conexion con el servidor");
       }
     }
 
+    // Cerrar sesion: suelta el control (si lo tiene) y vuelve al inicio de sesion
+    async function salir() {
+      if (control === "tuyo") {
+        try { await pedir("/soltar"); } catch (e) {}
+      }
+      location.href = "/";
+    }
+
     async function enviar(n) {
       avisar("", "Enviando " + n + "...");
       try {
         const datos = await pedir("/enviar/" + n);
-        if (datos.control) mostrar(datos.control);
+        if (datos.control) mostrar(datos.control, datos.quien);
         if (datos.ok) {
           avisar("ok", "Enviado: " + datos.enviado + " → ESP32 respondio: " + datos.respuesta);
         } else {
@@ -126,7 +147,7 @@
       const antes = acciones;
       try {
         const datos = await pedir("/estado");
-        if (antes === acciones) mostrar(datos.control);
+        if (antes === acciones) mostrar(datos.control, datos.quien);
       } catch (e) {
         if (antes === acciones) mostrar("");
       }

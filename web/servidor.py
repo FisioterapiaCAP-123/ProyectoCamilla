@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Servidor web sencillo: 3 botones que envian comandos al ESP32 por USB serial
 y muestran la respuesta que devuelve el ESP32. Solo un dispositivo (el que tiene
-el control) puede mandar ordenes a la vez.
+el control) puede mandar ordenes a la vez. Antes se inicia sesion con un nombre
+(sin contraseña) para saber quien tiene el control.
 
 Uso:  python3 servidor.py            (busca /dev/ttyUSB0 o /dev/ttyACM0)
       PUERTO=/dev/ttyUSB1 python3 servidor.py
@@ -14,7 +15,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 import serial
 
@@ -26,11 +27,12 @@ COMANDOS_VALIDOS = {"1", "2", "3"}
 COMANDO_DETENER = "0"  # se manda al ESP32 cada vez que cambia quien tiene el control
 TIEMPO_LIBERAR = 60  # segundos sin noticias de la pagina que tiene el control para liberarlo
 
-HTML = (Path(__file__).parent / "index.html").read_bytes()
+CARPETA = Path(__file__).parent  # los .html se leen en cada visita: al editarlos basta con recargar la pagina
 
 esp = None
 candado = threading.RLock()  # una cosa a la vez: el puerto serial y el control
 dueno = None  # identificador de la pagina que tiene el control (None = libre)
+nombre_dueno = ""  # nombre con el que inicio sesion quien tiene el control
 visto = 0.0  # ultima vez que esa pagina se comunico
 
 
@@ -72,10 +74,10 @@ def enviar_seguro(comando):
         return None, str(e)
 
 
-def cambiar_dueno(nuevo):
+def cambiar_dueno(nuevo, nombre=""):
     """Cambia quien tiene el control; si alguien lo pierde, detiene la camilla."""
-    global dueno, visto
-    anterior, dueno, visto = dueno, nuevo, time.monotonic()
+    global dueno, nombre_dueno, visto
+    anterior, dueno, nombre_dueno, visto = dueno, nuevo, nombre, time.monotonic()
     if anterior is not None and anterior != nuevo:
         enviar_seguro(COMANDO_DETENER)
 
@@ -108,36 +110,43 @@ class Manejador(BaseHTTPRequestHandler):
 
         ruta = urlsplit(self.path).path
         dispositivo = self.headers.get("X-Dispositivo", "")  # lo manda la pagina
+        nombre = unquote(self.headers.get("X-Nombre", "")).strip()[:30]  # el del inicio de sesion
 
         if ruta == "/":
-            self.responder(200, HTML, "text/html; charset=utf-8")
+            self.responder(200, (CARPETA / "login.html").read_bytes(), "text/html; charset=utf-8")
+        elif ruta == "/control":
+            self.responder(200, (CARPETA / "index.html").read_bytes(), "text/html; charset=utf-8")
         elif ruta == "/estado":
             with candado:
                 control = estado_control(dispositivo)
-            self.json(200, {"control": control})
+                quien = nombre_dueno
+            self.json(200, {"control": control, "quien": quien})
         elif ruta == "/tomar":
             if not dispositivo:
                 return self.json(400, {"error": "Falta el identificador del dispositivo"})
             with candado:
                 estado_control(dispositivo)  # libera el control si estaba abandonado
-                cambiar_dueno(dispositivo)
-            self.json(200, {"control": "tuyo"})
+                cambiar_dueno(dispositivo, nombre)
+            self.log_message("%s tomo el control", nombre or "(sin nombre)")
+            self.json(200, {"control": "tuyo", "quien": nombre})
         elif ruta == "/soltar":
             with candado:
                 if estado_control(dispositivo) == "tuyo":
                     cambiar_dueno(None)
                 control = estado_control(dispositivo)
-            self.json(200, {"control": control})
+                quien = nombre_dueno
+            self.json(200, {"control": control, "quien": quien})
         elif ruta.startswith("/enviar/"):
             comando = ruta.rsplit("/", 1)[-1]
             if comando not in COMANDOS_VALIDOS:
                 return self.json(400, {"ok": False, "error": "Comando invalido"})
             with candado:
                 control = estado_control(dispositivo)
+                quien = nombre_dueno
                 if control == "tuyo":
                     respuesta, error = enviar_seguro(comando)
             if control != "tuyo":
-                return self.json(403, {"ok": False, "control": control,
+                return self.json(403, {"ok": False, "control": control, "quien": quien,
                                        "error": "No tienes el control"})
             if error:
                 self.json(500, {"ok": False, "control": control, "error": error})
