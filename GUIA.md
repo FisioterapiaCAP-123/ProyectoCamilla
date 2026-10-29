@@ -15,14 +15,15 @@
 | `web/index.html` | La página de control (botones, tomar/soltar el control) |
 | `web/bootstrap/` | Bootstrap 6.0.0-alpha.1 (estilos del inicio de sesión), guardado en el proyecto para no usar internet |
 | `red/instalar_red.sh` | Instala hostapd y crea la configuración de la red. Se corre **una vez** con `sudo` |
-| `red/encender_red.sh` | Enciende la red "Camilla", muestra quién se conecta; ENTER la apaga |
+| `red/encender_red.sh` | Enciende la red "Camilla" y la página, muestra quién se conecta; ENTER apaga las dos |
 
 ## Cómo funciona
 
 ### Página y servidor
-- `servidor.py` corre siempre como servicio de tu usuario (`camilla-web`) y arranca solo al encender la Raspberry. Puerto **8000**.
+- `servidor.py` **no arranca solo**: lo enciende `encender_red.sh` junto con la red, y ENTER lo apaga. Para probar sin la red se corre a mano (ver **Uso**). Puerto **8000**. Corre con tu usuario, sin `sudo`.
 - Botones 1, 2 y 3: de momento **no están conectados a nada**. Al presionarlos, la página muestra `Error: el boton N todavia no hace nada` sin llamar al servidor.
 - Bootstrap está en `web/bootstrap/` y lo entrega el mismo servidor: el inicio de sesión tiene sus estilos también en la red Camilla, que no tiene internet.
+- Las páginas se ven siempre en **modo claro**, aunque el celular esté en modo oscuro (`color-scheme: only light` y `data-bs-theme="light"`).
 
 ### Inicio de sesión (de momento acepta cualquier contraseña)
 - `/` muestra `login.html`: se escribe un nombre (máx. 30 letras) y una contraseña, y **Iniciar control** abre `/control?nombre=...`.
@@ -56,17 +57,21 @@
 cd ~/Desktop/"Proyecto Camilla"/red
 ./encender_red.sh
 ```
-Pide la contraseña de `sudo`, muestra la clave del WiFi. Conecta el celular a **Camilla**: la página se abre sola, o entra a `http://10.42.0.1`. **ENTER** apaga la red y vuelve al WiFi anterior.
+Pide la contraseña de `sudo` (no escribas `sudo` antes del script), enciende la red y la página, y muestra la clave del WiFi. Conecta el celular a **Camilla**: la página se abre sola, o entra a `http://10.42.0.1`. **ENTER** apaga la red y la página y vuelve al WiFi anterior.
 
-**Usar la página sin la red Camilla** (en la Raspberry): `http://localhost:8000`. Dos pestañas sirven para probar el control (cada pestaña cuenta como un dispositivo).
+**Usar la página sin la red Camilla** (en la Raspberry):
+```bash
+cd ~/Desktop/"Proyecto Camilla"
+python3 web/servidor.py
+```
+Abre `http://localhost:8000`. **Ctrl+C** apaga la página. Dos pestañas sirven para probar el control (cada pestaña cuenta como un dispositivo).
 
 **Comandos útiles:**
 
 | Para | Comando |
 |---|---|
-| Ver si el servidor corre | `systemctl --user status camilla-web` |
-| Aplicar cambios de `servidor.py` | `systemctl --user restart camilla-web` |
-| Ver mensajes del servidor en vivo | `journalctl -t python3 -f` |
+| Ver si la página está encendida | `ss -ltn 'sport = :8000'` (si sale `LISTEN`, está encendida) |
+| Ver mensajes de la página en vivo (con la red encendida) | `journalctl -t python3 -f` |
 | Ver la clave del WiFi | `sudo grep wpa_passphrase /etc/hostapd/camilla.conf` |
 | Cambiar la clave (mín. 8 caracteres) | `sudo nano /etc/hostapd/camilla.conf` → línea `wpa_passphrase=` |
 
@@ -75,7 +80,7 @@ Pide la contraseña de `sudo`, muestra la clave del WiFi. Conecta el celular a *
 | Si cambias... | Qué hacer |
 |---|---|
 | `login.html` o `index.html` | Guardar y **recargar la página** en el navegador. No hace falta reiniciar. |
-| `servidor.py` | Reiniciar el servicio: `systemctl --user restart camilla-web` |
+| `servidor.py` | Apagar y volver a encender la página: ENTER y otra vez `./encender_red.sh`, o **Ctrl+C** y otra vez `python3 web/servidor.py` |
 
 - Los `.html` se leen cada vez que alguien abre la página, así que siempre se ve la versión guardada.
 - `servidor.py` solo se lee al arrancar. Al reiniciarlo, quien tenga el control lo pierde (tendrá que volver a tomarlo).
@@ -85,9 +90,11 @@ Pide la contraseña de `sudo`, muestra la clave del WiFi. Conecta el celular a *
 
 - **Xiaomi/Android se desconecta "por no tener internet":** apagar el cambio automático a datos móviles (Ajustes → Wi-Fi → Asistente de Wi-Fi) y elegir mantener la conexión.
 - **iPhone:** al cerrar la ventana de la página, elegir **"Usar sin Internet"**.
+- **Android: "Usar esta red como está" cierra la ventana de la página.** Para seguir, usar la página dentro de esa ventana sin tocar el menú, o abrir `http://10.42.0.1` en el navegador con los **datos móviles apagados**.
 - **La página no carga escribiendo la dirección:** escribir `http://` al inicio (sin eso, algunos navegadores intentan `https`).
 - **Si se cerró la terminal con la red encendida y no vuelve el internet:**
   ```bash
+  pkill -f web/servidor.py
   sudo pkill -F /run/camilla-hostapd.pid
   sudo pkill -F /run/camilla-dnsmasq.pid
   sudo nft destroy table ip camilla
@@ -102,23 +109,28 @@ Se puede quitar cada parte por separado:
 | Quitar | Comandos |
 |---|---|
 | La red WiFi "Camilla" | `sudo apt purge hostapd` y `sudo rm -f /etc/hostapd/camilla.conf` |
-| El servidor automático | `systemctl --user disable --now camilla-web`, `rm ~/.config/systemd/user/camilla-web.service` y `loginctl disable-linger` |
 | El reporte de pruebas | `rm ~/reporte_red.txt` |
 | El proyecto | Borrar las carpetas `web/` y `red/` y esta guía |
 
-Si quitas hostapd, `encender_red.sh` deja de funcionar. Si quitas el servidor automático, la página se puede seguir abriendo a mano con `python3 web/servidor.py`.
+Si quitas hostapd, `encender_red.sh` deja de funcionar; la página se puede seguir abriendo a mano con `python3 web/servidor.py`.
 
 ## Cambios en el sistema (fuera de la carpeta del proyecto)
 
+**Estado actual (28-10-2026):**
+- **Instalado:** el paquete `hostapd`, `/etc/hostapd/camilla.conf` y `~/reporte_red.txt`. El servicio propio de `hostapd` que trae Debian está `masked`: nunca arranca solo.
+- **Nada arranca solo** al encender la Raspberry. La red y la página se encienden a mano con `encender_red.sh`.
+- **No hay** servicios de systemd del proyecto, reglas de `sudo` o polkit, ni tareas programadas (cron).
+- Para el producto terminado se hará que todo arranque solo. Cuando se haga, se anotará aquí.
+
 | Fecha | Cambio | Dónde | Estado | Cómo deshacer |
 |---|---|---|---|---|
-| 21-10-2026 | Servicio que arranca la página al encender | `~/.config/systemd/user/camilla-web.service` | Activo | `systemctl --user disable --now camilla-web` y borrar el archivo |
-| 21-10-2026 | "Linger": el servicio arranca sin iniciar sesión | `/var/lib/systemd/linger/diegocardona` | Activo | `loginctl disable-linger` |
+| 21-10-2026 | Servicio que arranca la página al encender | `~/.config/systemd/user/camilla-web.service` | **Quitado** el 28-10-2026 | — |
+| 21-10-2026 | "Linger": el servicio arranca sin iniciar sesión | `/var/lib/systemd/linger/diegocardona` | **Quitado** el 28-10-2026 | — |
 | 21-10-2026 | Programa hostapd | Paquete del sistema (`apt`) | Instalado | `sudo apt purge hostapd` |
 | 21-10-2026 | Configuración de la red (incluye la clave, solo la lee root) | `/etc/hostapd/camilla.conf` | Activo | `sudo rm -f /etc/hostapd/camilla.conf` |
 | 21-10-2026 | Reporte de pruebas de la red | `~/reporte_red.txt` | Crece con cada prueba | `rm ~/reporte_red.txt` |
 | 21-10-2026 | Perfil "Camilla" de NetworkManager | `/etc/NetworkManager/system-connections/` | **Ya borrado** (no funcionaba) | — |
 
-**Solo mientras la red está encendida** (el script lo quita al presionar ENTER): `wlan0` fuera de NetworkManager, IP `10.42.0.1`, procesos `hostapd` y `dnsmasq`, tabla `nft` "camilla".
+**Solo mientras la red está encendida** (el script lo quita al presionar ENTER): `wlan0` fuera de NetworkManager, IP `10.42.0.1`, procesos `hostapd` y `dnsmasq`, tabla `nft` "camilla" y la página (`servidor.py`).
 
 No se instaló nada más ni se cambió la red "Meso".

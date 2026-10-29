@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es">
+<html lang="es" data-bs-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -8,6 +8,8 @@
   <link href="/bootstrap/bootstrap.min.css" rel="stylesheet">
   <script type="module" src="/bootstrap/bootstrap.bundle.min.js"></script>
   <style>
+    /* Siempre modo claro, aunque el celular este en modo oscuro (Bootstrap 6 lo sigue solo) */
+    :root { color-scheme: only light; }
     body { font-family: sans-serif; padding: 20px; background: #f4f4f4; }
     form { background: white; border-radius: 10px; padding: 20px; margin: 0 auto; max-width: 420px; }
     input { font-size: 20px; padding: 12px; width: 100%; box-sizing: border-box;
