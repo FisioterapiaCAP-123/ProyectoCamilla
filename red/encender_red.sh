@@ -1,8 +1,9 @@
 #!/bin/bash
-# Enciende la red WiFi "Camilla" de la Raspberry (con hostapd) y muestra en vivo
-# quien se conecta. Al presionar ENTER la apaga y vuelve a conectar a internet.
+# Enciende la red WiFi "Camilla" de la Raspberry (con hostapd) y la pagina web
+# (web/servidor.py), y muestra en vivo quien se conecta. Al presionar ENTER apaga
+# las dos y vuelve a conectar a internet.
 #
-# Uso:  ./encender_red.sh      (pide la clave de sudo al empezar)
+# Uso:  ./encender_red.sh      (sin sudo delante: pide la clave de sudo al empezar)
 # Antes hay que instalar una sola vez:  sudo ./instalar_red.sh
 #
 # Cada prueba se agrega al reporte ~/reporte_red.txt
@@ -11,8 +12,11 @@ CONF=/etc/hostapd/camilla.conf
 CTRL=/run/hostapd
 REPORTE="$HOME/reporte_red.txt"
 INICIO=$(date '+%Y-%m-%d %H:%M:%S')
+PROYECTO=$(dirname "$(dirname "$(readlink -f "$0")")")  # carpeta "Proyecto Camilla"
 
 [ -e "$CONF" ] || { echo "Primero instala la red con:  sudo ./instalar_red.sh"; exit 1; }
+# Con sudo delante la pagina correria como root: el script pide la clave solo para lo que la necesita
+[ "$(id -u)" -ne 0 ] || { echo "Correlo sin sudo:  ./encender_red.sh"; exit 1; }
 sudo -v || exit 1
 
 # WiFi al que hay que volver al terminar (p. ej. "Meso")
@@ -25,8 +29,8 @@ apagar() {
         echo "===== $INICIO  red=Camilla (hostapd)  anterior=${ANTERIOR:-ninguna} ====="
         echo "--- dispositivos conectados al final"; hostapd_cli -p $CTRL -i wlan0 all_sta 2>&1
     } >> "$REPORTE"
-    echo "Apagando la red Camilla..."
-    pkill -P $$ 2>/dev/null  # detener el monitor de eventos
+    echo "Apagando la red Camilla y la pagina..."
+    pkill -P $$ 2>/dev/null  # detener la pagina y el monitor de eventos
     sudo pkill -F /run/camilla-hostapd.pid 2>/dev/null
     sudo pkill -F /run/camilla-dnsmasq.pid 2>/dev/null
     sudo nft destroy table ip camilla 2>/dev/null
@@ -77,13 +81,20 @@ table ip camilla {
 }
 EOF
 
+# Pagina web (puerto 8000): corre con tu usuario, sin sudo. Sus mensajes van al registro como "python3"
+if ss -ltn 'sport = :8000' | grep -q LISTEN; then
+    echo "La pagina ya estaba encendida (puerto 8000 ocupado): se usa esa."
+else
+    python3 -u "$PROYECTO/web/servidor.py" 2>&1 | logger -t python3 &
+fi
+
 echo
 echo "  Red WiFi:  Camilla"
 echo "  Clave:     $(sudo sed -n 's/^wpa_passphrase=//p' "$CONF")"
 echo "  Pagina:    se abre sola al conectarse (o entra a http://10.42.0.1)"
 echo
 echo "Busca la red en el celular. Aqui veras si alguien se conecta."
-echo "Presiona ENTER para apagar la red y volver a internet."
+echo "Presiona ENTER para apagar la red y la pagina y volver a internet."
 echo
 
 # Monitor de eventos: conexiones, clave incorrecta, IP entregada y visitas a la pagina
