@@ -35,9 +35,9 @@
     <button id="cancelar" onclick="cancelar()">Cancelar</button>
   </div>
   <div>
-    <button class="cmd" onclick="enviar(1)" disabled>Boton 1</button>
-    <button class="cmd" onclick="enviar(2)" disabled>Boton 2</button>
-    <button class="cmd" onclick="enviar(3)" disabled>Boton 3</button>
+    <button class="cmd" onclick="presionar(1)" disabled>Boton 1</button>
+    <button class="cmd" onclick="presionar(2)" disabled>Boton 2</button>
+    <button class="cmd" onclick="presionar(3)" disabled>Boton 3</button>
   </div>
   <div id="resultado">Toma el control para usar los botones</div>
 
@@ -47,7 +47,7 @@
     if (!nombre) location.replace("/");
     document.getElementById("nombre").textContent = nombre;
 
-    // Identificador de esta pagina: el servidor solo acepta ordenes de quien tiene el control
+    // Identificador de esta pagina: el servidor lo usa para saber quien tiene el control
     let id;
     try { id = sessionStorage.getItem("dispositivo"); } catch (e) {}
     if (!id) {
@@ -127,19 +127,9 @@
       location.href = "/";
     }
 
-    async function enviar(n) {
-      avisar("", "Enviando " + n + "...");
-      try {
-        const datos = await pedir("/enviar/" + n);
-        if (datos.control) mostrar(datos.control, datos.quien);
-        if (datos.ok) {
-          avisar("ok", "Enviado: " + datos.enviado + " → ESP32 respondio: " + datos.respuesta);
-        } else {
-          avisar("error", "Error: " + datos.error);
-        }
-      } catch (e) {
-        avisar("error", "No hay conexion con el servidor");
-      }
+    // De momento los botones no hacen nada: solo muestran un error (no llaman al servidor)
+    function presionar(n) {
+      avisar("error", "Error: el boton " + n + " todavia no hace nada");
     }
 
     // Preguntar al servidor quien tiene el control cada segundo y medio
