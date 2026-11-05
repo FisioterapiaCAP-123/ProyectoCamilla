@@ -7,7 +7,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
-import clave
+import basedatos
 
 PUERTO_WEB = 8000
 IP_RED = "10.42.0.1"  # IP de la Raspberry en su propia red WiFi "Camilla"
@@ -43,52 +43,58 @@ class Camilla:
     """Estado compartido por todas las paginas. Cada metodo se llama con `candado` tomado."""
 
     def __init__(self):
-        self.sesiones = {}  # token -> {"usuario", "visto"}: el nombre con el que entro cada pagina
-        self.titular = None  # nombre de quien tiene el control (None = libre)
-        self.solicitud = None  # pedido de control pendiente: {"id", "usuario", "token", "creada"}
+        self.sesiones = {}  # token -> {"id", "usuario", "nombre", "rol", "visto"}: el perfil de cada pagina
+        self.titular = None  # usuario de quien tiene el control (None = libre)
+        self.solicitud = None  # pedido de control pendiente: {"id", "usuario", "nombre", "token", "creada"}
         self.respuestas = {}  # token de quien pidio el control -> {"aceptada", "usuario"}: se entrega una vez
         self.paro = False  # paro de emergencia: lo puede activar o liberar cualquiera
         self.angulos = {"cabeza": 0, "piernas": 0}  # posicion simulada mientras no haya sensores
         self.motor = None  # motor continuo en marcha (altura): {"seccion", "dir", "visto"}
 
     # ---------- sesiones ----------
-    def entrar(self, usuario):
-        """Nueva sesion con ese nombre, o None si ya hay alguien conectado con el.
+    def entrar(self, perfil):
+        """Nueva sesion para ese perfil (ya se comprobo su contrasena).
 
-        Los nombres no se repiten: asi nadie puede escribir el nombre de otro para
-        quedarse con su control sin pedirlo. Si quien lo usaba lleva mas de
-        TIEMPO_LIBERAR sin dar senales, el nombre queda libre y su sesion vieja se borra."""
-        mismo = [t for t, s in self.sesiones.items() if s["usuario"].lower() == usuario.lower()]
-        if any(time.monotonic() - self.sesiones[t]["visto"] <= TIEMPO_LIBERAR for t in mismo):
-            return None
-        for viejo in mismo:
-            del self.sesiones[viejo]
-            self.respuestas.pop(viejo, None)
-            if self.solicitud and self.solicitud["token"] == viejo:
-                self.solicitud = None
-        if self.titular and self.titular.lower() == usuario.lower():
-            self.liberar(f"{self.titular} sin conexion")  # el control no pasa al nuevo por llamarse igual
+        Un perfil tiene una sola sesion: si ya estaba abierto en otro celular o
+        pestana, esa se cierra. El control no pasa solo al nuevo dispositivo."""
+        for viejo in [t for t, s in self.sesiones.items() if s["id"] == perfil["id"]]:
+            self.cerrar(viejo, "entro desde otro dispositivo")
         token = secrets.token_urlsafe(24)
-        self.sesiones[token] = {"usuario": usuario, "visto": time.monotonic()}
-        anotar(f"{usuario} inicio sesion")
+        self.sesiones[token] = {"id": perfil["id"], "usuario": perfil["usuario"], "nombre": perfil["nombre"],
+                                "rol": perfil["rol"], "visto": time.monotonic()}
+        anotar(f"{perfil['usuario']} inicio sesion")
         return token
 
-    def usuario_de(self, token):
-        """Usuario de la sesion, o None. De paso anota que esa pagina sigue viva."""
+    def sesion_de(self, token):
+        """La sesion (perfil) de ese token, o None. De paso anota que esa pagina sigue viva."""
         sesion = self.sesiones.get(token) if token else None
-        if sesion is None:
-            return None
-        sesion["visto"] = time.monotonic()
-        return sesion["usuario"]
+        if sesion is not None:
+            sesion["visto"] = time.monotonic()
+        return sesion
 
-    def salir(self, token, usuario):
-        del self.sesiones[token]
+    def cerrar(self, token, motivo):
+        usuario = self.sesiones[token]["usuario"]
         self.respuestas.pop(token, None)
         if self.solicitud and self.solicitud["token"] == token:
             self.solicitud = None
-        anotar(f"{usuario} cerro sesion")
+        anotar(f"{usuario} cerro sesion ({motivo})")
         if self.titular == usuario:
-            self.liberar(f"{usuario} salio")
+            self.liberar(f"{usuario} {motivo}")
+        del self.sesiones[token]
+
+    def echar(self, id_usuario, motivo):
+        """Cierra la sesion de un perfil que se desactivo o se borro."""
+        for token in [t for t, s in self.sesiones.items() if s["id"] == id_usuario]:
+            self.cerrar(token, motivo)
+
+    def cambiar_rol(self, id_usuario, rol):
+        for sesion in self.sesiones.values():
+            if sesion["id"] == id_usuario:
+                sesion["rol"] = rol
+
+    def nombre_de(self, usuario):
+        """Nombre para mostrar de un usuario conectado (si ya no esta, su usuario)."""
+        return next((s["nombre"] for s in self.sesiones.values() if s["usuario"] == usuario), usuario)
 
     def ultimo_contacto(self, usuario):
         return max((s["visto"] for s in self.sesiones.values() if s["usuario"] == usuario), default=0.0)
@@ -107,24 +113,24 @@ class Camilla:
         """Deja el control libre; si alguien lo estaba pidiendo, pasa a esa persona."""
         if self.solicitud:
             pedido, self.solicitud = self.solicitud, None
-            self.respuestas[pedido["token"]] = {"aceptada": True, "usuario": self.titular}
+            self.respuestas[pedido["token"]] = {"aceptada": True, "usuario": self.nombre_de(self.titular)}
             self.cambiar_titular(pedido["usuario"], motivo + ", lo habia pedido")
         else:
             self.cambiar_titular(None, motivo)
 
     def tomar(self, usuario):
         if self.titular not in (None, usuario):
-            return False, f"{self.titular} ya tiene el control."
+            return False, f"{self.nombre_de(self.titular)} ya tiene el control."
         self.cambiar_titular(usuario, "lo tomo")
         return True, None
 
-    def solicitar(self, usuario, token):
+    def solicitar(self, usuario, nombre, token):
         if self.titular in (None, usuario):  # libre: el primero que lo pide se lo queda
             return self.tomar(usuario)
         if self.solicitud and self.solicitud["token"] != token:
-            return False, f"{self.solicitud['usuario']} ya pidio el control. Intenta en unos segundos."
+            return False, f"{self.solicitud['nombre']} ya pidió el control. Intenta en unos segundos."
         self.respuestas.pop(token, None)
-        self.solicitud = {"id": secrets.token_hex(4), "usuario": usuario, "token": token,
+        self.solicitud = {"id": secrets.token_hex(4), "usuario": usuario, "nombre": nombre, "token": token,
                           "creada": time.monotonic()}
         anotar(f"{usuario} pide el control a {self.titular}")
         return True, None
@@ -139,9 +145,9 @@ class Camilla:
         if self.titular != usuario:
             return False, "No tienes el control."
         if not self.solicitud or self.solicitud["id"] != id_pedido:
-            return False, "Esa solicitud ya no esta vigente."
+            return False, "Esa solicitud ya no está vigente."
         pedido, self.solicitud = self.solicitud, None
-        self.respuestas[pedido["token"]] = {"aceptada": aceptar, "usuario": usuario}
+        self.respuestas[pedido["token"]] = {"aceptada": aceptar, "usuario": self.nombre_de(usuario)}
         if aceptar:
             self.cambiar_titular(pedido["usuario"], f"{usuario} se lo paso")
         else:
@@ -192,14 +198,21 @@ class Camilla:
         return True, None
 
     # ---------- lo que la pagina consulta cada segundo ----------
-    def estado(self, usuario, token):
+    def control(self):
+        """Quien tiene el control: "titular" es el nombre que se muestra, "usuario" lo identifica."""
+        return {"titular": self.nombre_de(self.titular) if self.titular else None, "usuario": self.titular}
+
+    def estado(self, sesion, token):
+        usuario = sesion["usuario"] if sesion else None
         return {
             "usuario": usuario,
-            "control": {"titular": self.titular},
+            "nombre": sesion["nombre"] if sesion else None,
+            "rol": sesion["rol"] if sesion else None,
+            "control": self.control(),
             "paro": self.paro,
             "simulacion": SIMULACION,
             # el pedido de control solo le llega a quien tiene el control
-            "solicitud": ({"id": self.solicitud["id"], "usuario": self.solicitud["usuario"]}
+            "solicitud": ({"id": self.solicitud["id"], "usuario": self.solicitud["nombre"]}
                           if self.solicitud and usuario and usuario == self.titular else None),
             # la respuesta solo le llega a quien pidio, una sola vez
             "respuesta": self.respuestas.pop(token, None) if usuario else None,
@@ -238,17 +251,80 @@ def seccion_y_direccion(datos, campo):
     return seccion, valor
 
 
-# Rutas POST que necesitan haber iniciado sesion: (camilla, datos, usuario, token) -> (ok, mensaje)
+# Rutas POST que necesitan haber iniciado sesion: (camilla, datos, sesion, token) -> (ok, mensaje)
 ACCIONES = {
-    "/api/control/tomar": lambda c, d, u, t: c.tomar(u),
-    "/api/control/solicitar": lambda c, d, u, t: c.solicitar(u, t),
-    "/api/control/cancelar": lambda c, d, u, t: c.cancelar(t),
-    "/api/control/responder": lambda c, d, u, t: c.responder(u, d.get("id"), d.get("aceptar") is True),
-    "/api/control/liberar": lambda c, d, u, t: c.soltar(u),
-    "/api/mover": lambda c, d, u, t: (c.mover(u, *s) if (s := seccion_y_direccion(d, "dir")) else (False, None)),
-    "/api/paso": lambda c, d, u, t: (c.paso(u, *s) if (s := seccion_y_direccion(d, "grados")) else (False, None)),
-    "/api/detener": lambda c, d, u, t: c.detener(u, d.get("seccion")),
+    "/api/control/tomar": lambda c, d, s, t: c.tomar(s["usuario"]),
+    "/api/control/solicitar": lambda c, d, s, t: c.solicitar(s["usuario"], s["nombre"], t),
+    "/api/control/cancelar": lambda c, d, s, t: c.cancelar(t),
+    "/api/control/responder": lambda c, d, s, t: c.responder(s["usuario"], d.get("id"), d.get("aceptar") is True),
+    "/api/control/liberar": lambda c, d, s, t: c.soltar(s["usuario"]),
+    "/api/mover": lambda c, d, s, t: (c.mover(s["usuario"], *m) if (m := seccion_y_direccion(d, "dir")) else (False, None)),
+    "/api/paso": lambda c, d, s, t: (c.paso(s["usuario"], *m) if (m := seccion_y_direccion(d, "grados")) else (False, None)),
+    "/api/detener": lambda c, d, s, t: c.detener(s["usuario"], d.get("seccion")),
 }
+
+
+def es_id(valor):
+    return isinstance(valor, int) and not isinstance(valor, bool)
+
+
+def administrar(ruta, datos, admin):
+    """Rutas de /api/pacientes y /api/usuarios: solo llegan aqui los administradores.
+    Devuelve la respuesta, o None si la ruta no existe. Se llama sin `candado` (usa la base de datos)."""
+    if ruta == "/api/pacientes/lista":
+        return {"ok": True, "pacientes": basedatos.pacientes()}
+    if ruta == "/api/pacientes/guardar":
+        id_paciente = datos.get("id")
+        if id_paciente is not None and not es_id(id_paciente):
+            return {"ok": False, "mensaje": "Petición inválida."}
+        guardado, error = basedatos.guardar_paciente(id_paciente, datos.get("nombre"), datos.get("edad"), admin["usuario"])
+        if error:
+            return {"ok": False, "campo": error[0], "mensaje": error[1]}
+        # en el registro del sistema no van datos del paciente, solo el numero
+        anotar(f"{admin['usuario']} {'edito' if id_paciente else 'agrego'} el registro de paciente #{guardado}")
+        return {"ok": True, "id": guardado}
+    if ruta == "/api/pacientes/borrar":
+        if not (es_id(datos.get("id")) and basedatos.borrar_paciente(datos["id"])):
+            return {"ok": False, "mensaje": "Ese registro ya no existe."}
+        anotar(f"{admin['usuario']} borro el registro de paciente #{datos['id']}")
+        return {"ok": True}
+    if ruta == "/api/usuarios/lista":
+        return {"ok": True, "usuarios": basedatos.usuarios()}
+    if ruta not in ("/api/usuarios/rol", "/api/usuarios/activo", "/api/usuarios/clave", "/api/usuarios/borrar"):
+        return None
+
+    perfil = basedatos.buscar_usuario(datos["id"]) if es_id(datos.get("id")) else None
+    if perfil is None:
+        return {"ok": False, "mensaje": "Ese perfil ya no existe."}
+    # El propio perfil no se toca desde aqui: asi siempre queda al menos un administrador
+    if perfil["id"] == admin["id"]:
+        return {"ok": False, "mensaje": "Tu propio perfil no se puede cambiar desde aquí."}
+    if ruta == "/api/usuarios/rol":
+        if datos.get("rol") not in basedatos.ROLES:
+            return {"ok": False, "mensaje": "Ese rol no existe."}
+        basedatos.cambiar_usuario(perfil["id"], rol=datos["rol"])
+        with candado:
+            camilla.cambiar_rol(perfil["id"], datos["rol"])
+        anotar(f"{admin['usuario']} cambio el rol de {perfil['usuario']} a {datos['rol']}")
+    elif ruta == "/api/usuarios/activo":
+        activo = datos.get("activo") is True
+        basedatos.cambiar_usuario(perfil["id"], activo=int(activo))
+        if not activo:
+            with candado:
+                camilla.echar(perfil["id"], "perfil desactivado")
+        anotar(f"{admin['usuario']} {'activo' if activo else 'desactivo'} el perfil de {perfil['usuario']}")
+    elif ruta == "/api/usuarios/clave":
+        clave = str(datos.get("clave", ""))
+        if error := basedatos.revisar_clave(clave):
+            return {"ok": False, "campo": "clave", "mensaje": error}
+        basedatos.cambiar_usuario(perfil["id"], clave=clave)
+        anotar(f"{admin['usuario']} cambio la contrasena de {perfil['usuario']}")
+    else:
+        basedatos.borrar_usuario(perfil["id"])
+        with candado:
+            camilla.echar(perfil["id"], "perfil borrado")
+        anotar(f"{admin['usuario']} borro el perfil de {perfil['usuario']}")
+    return {"ok": True}
 
 
 class Manejador(BaseHTTPRequestHandler):
@@ -268,7 +344,7 @@ class Manejador(BaseHTTPRequestHandler):
         if ruta == "/api/estado":
             token = self.headers.get("X-Sesion", "")
             with candado:
-                datos = camilla.estado(camilla.usuario_de(token), token)
+                datos = camilla.estado(camilla.sesion_de(token), token)
             self.json(200, datos)
         elif ruta in ARCHIVOS:
             nombre, tipo = ARCHIVOS[ruta]
@@ -283,40 +359,63 @@ class Manejador(BaseHTTPRequestHandler):
             return self.json(400, {"ok": False, "mensaje": "Peticion invalida."})
         if ruta == "/api/login":
             return self.login(datos)
+        if ruta == "/api/registro":
+            return self.registro(datos)
 
         token = self.headers.get("X-Sesion", "")
         with candado:
-            usuario = camilla.usuario_de(token)
+            sesion = camilla.sesion_de(token)
+            perfil = dict(sesion) if sesion else None  # copia: la base de datos se usa sin el candado
             if ruta == "/api/paro":  # el paro lo puede mandar cualquiera, aunque no haya iniciado sesion
                 ok, mensaje = camilla.cambiar_paro(datos.get("activo") is True,
-                                                   usuario or f"alguien en {self.client_address[0]}")
-            elif usuario is None:
-                return self.json(401, {"ok": False, "mensaje": "Tu sesion termino. Vuelve a iniciar sesion."})
+                                                   sesion["usuario"] if sesion else f"alguien en {self.client_address[0]}")
+            elif sesion is None:
+                return self.json(401, {"ok": False, "mensaje": "Tu sesión terminó. Vuelve a iniciar sesión."})
             elif ruta == "/api/logout":
                 ok, mensaje = True, None
-                camilla.salir(token, usuario)
+                camilla.cerrar(token, "salio")
             elif ruta in ACCIONES:
-                ok, mensaje = ACCIONES[ruta](camilla, datos, usuario, token)
-            else:
+                ok, mensaje = ACCIONES[ruta](camilla, datos, sesion, token)
+            elif not ruta.startswith(("/api/pacientes/", "/api/usuarios/")):
                 return self.responder(404, b"No encontrado", "text/plain")
+            elif perfil["rol"] != "admin":
+                return self.json(403, {"ok": False, "mensaje": "Solo un administrador puede entrar aquí."})
+            else:
+                ok = None
+        if ok is None:
+            respuesta = administrar(ruta, datos, perfil)
+            if respuesta is None:
+                return self.responder(404, b"No encontrado", "text/plain")
+            return self.json(200, respuesta)
         self.json(200, {"ok": ok, "mensaje": mensaje})
 
     def login(self, datos):
-        # El nombre solo dice quien tiene el control; la contrasena es una sola para todos
-        nombre = " ".join(str(datos.get("usuario", "")).split())[:30]
-        if not nombre:
-            return self.json(200, {"ok": False, "campo": "usuario", "mensaje": "Escribe tu nombre."})
-        if not clave.comprobar(str(datos.get("clave", ""))):  # lento a proposito: fuera del candado
+        usuario, clave = str(datos.get("usuario", "")).strip(), str(datos.get("clave", ""))
+        if not usuario or not clave:
+            return self.json(200, {"ok": False, "mensaje": "Escribe tu usuario y tu contraseña."})
+        perfil = basedatos.comprobar(usuario, clave)  # lento a proposito: fuera del candado
+        if perfil is None:
             time.sleep(1)  # frena a quien intente adivinarla
-            anotar(f"contrasena incorrecta (nombre {nombre!r})")
-            return self.json(200, {"ok": False, "mensaje": "Contraseña incorrecta."})
+            anotar(f"contrasena incorrecta (usuario {usuario[:30]!r})")
+            return self.json(200, {"ok": False, "mensaje": "Usuario o contraseña incorrectos."})
+        if not perfil["activo"]:
+            return self.json(200, {"ok": False, "mensaje": "Tu perfil está desactivado. Habla con el administrador."})
+        self.abrir_sesion(perfil)
+
+    def registro(self, datos):
+        # Cualquiera puede crear su perfil: entra como fisioterapeuta
+        perfil, error = basedatos.crear_usuario(datos.get("usuario"), datos.get("nombre"), datos.get("clave"))
+        if error:
+            return self.json(200, {"ok": False, "campo": error[0], "mensaje": error[1]})
+        anotar(f"{perfil['usuario']} creo su perfil")
+        self.abrir_sesion(perfil)
+
+    def abrir_sesion(self, perfil):
         with candado:
-            token = camilla.entrar(nombre)
-            titular = camilla.titular
-        if token is None:
-            return self.json(200, {"ok": False, "campo": "usuario",
-                                   "mensaje": f"Ya hay alguien conectado como {nombre}. Usa otro nombre."})
-        self.json(200, {"ok": True, "usuario": nombre, "sesion": token, "control": {"titular": titular}})
+            token = camilla.entrar(perfil)
+            control = camilla.control()
+        self.json(200, {"ok": True, "sesion": token, "usuario": perfil["usuario"], "nombre": perfil["nombre"],
+                        "rol": perfil["rol"], "control": control})
 
     def leer_json(self):
         try:
@@ -346,8 +445,9 @@ class Manejador(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    if not clave.hay_clave():
-        print("Aviso: no hay contrasena del panel y no entra nadie. Ponla con:  python3 web/clave.py")
+    basedatos.iniciar()
+    if not basedatos.hay_admin():
+        print("Aviso: no hay administrador. Crea tu perfil en la pagina y luego:  python3 web/basedatos.py admin TU_USUARIO")
     threading.Thread(target=vigilar, daemon=True).start()
     print(f"Pagina en http://localhost:{PUERTO_WEB}")
     ThreadingHTTPServer(("0.0.0.0", PUERTO_WEB), Manejador).serve_forever()

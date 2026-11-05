@@ -17,8 +17,8 @@ PROYECTO=$(dirname "$(dirname "$(readlink -f "$0")")")  # carpeta "Proyecto Cami
 [ -e "$CONF" ] || { echo "Primero instala la red con:  sudo ./instalar_red.sh"; exit 1; }
 # Con sudo delante la pagina correria como root: el script pide la clave solo para lo que la necesita
 [ "$(id -u)" -ne 0 ] || { echo "Correlo sin sudo:  ./encender_red.sh"; exit 1; }
-# Sin contrasena nadie puede entrar al panel (se pone con web/clave.py)
-[ -s "$PROYECTO/web/clave.json" ] || echo "Aviso: no hay contrasena para entrar a la pagina. Ponla con:  python3 web/clave.py"
+# Sin administrador nadie puede ver los registros (se nombra con web/basedatos.py)
+python3 "$PROYECTO/web/basedatos.py" revisar
 sudo -v || exit 1
 
 # WiFi al que hay que volver al terminar (p. ej. "Meso")
@@ -108,7 +108,7 @@ while read -r linea; do
         *PSK-MISMATCH*)        echo "  >> Alguien intento conectarse con la CLAVE INCORRECTA" ;;
         DHCPACK*)              echo "  >> IP entregada: ${linea#* }" ;;
         *'"GET / '*)           echo "  >> Alguien abrio la pagina desde ${linea%% *}" ;;
-        *'inicio sesion'*|*'cerro sesion'*|*'control: '*|*'el control a '*|*PARO*|*'contrasena incorrecta'*)
+        *'inicio sesion'*|*'cerro sesion'*|*'creo su perfil'*|*'control: '*|*'el control a '*|*PARO*|*'contrasena incorrecta'*)
                                echo "  >> ${linea#*] }" ;;  # avisos del panel: quien entra, quien tiene el control, paro
     esac
 done &

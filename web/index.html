@@ -259,6 +259,28 @@ body{
 /* El login centrado */
 .login-caja{max-width:420px;width:100%}
 
+/* ---------------------------------------------------------------------
+   Pestanas del administrador (Control / Registros / Usuarios) y sus tablas
+   --------------------------------------------------------------------- */
+.pestanas .nav-link{
+  font-family:var(--titulo);font-size:1.15rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--bs-body-color);background:var(--bs-tertiary-bg);border:2px solid var(--bs-border-color);
+  min-height:48px;white-space:nowrap;
+}
+.pestanas .nav-link:hover{border-color:var(--bs-primary)}
+.pestanas .nav-link.active{color:#fff;background:var(--bs-primary);border-color:var(--bs-primary)}
+.tabla-admin th{
+  font-family:var(--titulo);font-size:.95rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--bs-secondary-color);background:var(--bs-tertiary-bg);
+}
+.tabla-admin td{padding-block:.7rem}
+.pestana-admin{padding-bottom:96px}   /* que el paro flotante no tape la ultima fila */
+.perfil-inicial{width:32px;height:32px;font-size:1.05rem}
+/* En celulares angostos Bloquear y Salir quedan solo con icono (el texto se sigue leyendo en voz) */
+@media (max-width:420px){
+  .texto-boton{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+}
+
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
@@ -282,20 +304,20 @@ body{
             </svg>
           </span>
           <h1 class="tipo-titulo fw-bold mb-1" style="font-size:2.1rem">Control camilla</h1>
-          <p class="text-uppercase fw-semibold small mb-0" style="letter-spacing:.09em;color:var(--bs-secondary-color)">
+          <p class="text-uppercase fw-semibold small mb-0" style="letter-spacing:.09em;color:var(--bs-secondary-color)" id="loginSubtitulo">
             Acceso al panel de operación
           </p>
         </div>
 
         <div class="alert d-flex align-items-start gap-2 d-none" id="loginAlerta" role="alert"></div>
 
+        <!-- Entrar con el perfil de cada uno -->
         <form id="formLogin" novalidate>
           <div class="mb-3">
-            <!-- El nombre solo sirve para ver quien tiene el control; la contrasena es la misma para todos -->
-            <label for="loginUsuario" class="form-label tipo-titulo text-uppercase fw-semibold" style="font-size:1.1rem">Nombre</label>
-            <input type="text" class="form-control form-control-lg" id="loginUsuario" name="usuario" maxlength="30"
-                   autocomplete="username" autocapitalize="words" spellcheck="false" placeholder="Tu nombre" required>
-            <div class="invalid-feedback">Escribe tu nombre.</div>
+            <label for="loginUsuario" class="form-label tipo-titulo text-uppercase fw-semibold" style="font-size:1.1rem">Usuario</label>
+            <input type="text" class="form-control form-control-lg" id="loginUsuario" name="usuario" maxlength="20"
+                   autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="" required>
+            <div class="invalid-feedback" id="loginUsuarioAviso">Escribe tu usuario.</div>
           </div>
 
           <div class="mb-4">
@@ -309,7 +331,7 @@ body{
                   <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>
                 </svg>
               </button>
-              <div class="invalid-feedback">Escribe tu contraseña.</div>
+              <div class="invalid-feedback" id="loginClaveAviso">Escribe tu contraseña.</div>
             </div>
           </div>
 
@@ -317,6 +339,54 @@ body{
                   id="btnIngresar" style="min-height:58px;font-size:1.4rem;letter-spacing:.08em">
             Ingresar
           </button>
+          <p class="text-center mt-4 mb-0">
+            ¿No tienes perfil?
+            <button type="button" class="btn btn-link p-0 align-baseline fw-semibold" id="irRegistro">Crear perfil</button>
+          </p>
+        </form>
+
+        <!-- Perfil nuevo: cualquiera lo crea y entra como fisioterapeuta -->
+        <form id="formRegistro" novalidate hidden>
+          <div class="mb-3">
+            <label for="regNombre" class="form-label tipo-titulo text-uppercase fw-semibold" style="font-size:1.1rem">Nombre</label>
+            <input type="text" class="form-control form-control-lg" id="regNombre" maxlength="40"
+                   autocomplete="name" autocapitalize="words" placeholder="Tu nombre" required>
+            <div class="form-text">Así te verán los demás en el panel. Mínimo 2 letras, sin números, tildes, símbolos ni espacios.</div>
+            <div class="invalid-feedback" id="regNombreAviso">Escribe tu nombre.</div>
+          </div>
+
+          <div class="mb-3">
+            <label for="regUsuario" class="form-label tipo-titulo text-uppercase fw-semibold" style="font-size:1.1rem">Usuario</label>
+            <input type="text" class="form-control form-control-lg" id="regUsuario" maxlength="20"
+                   autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Usuario" required>
+            <div class="form-text">Con él entras. De 3 a 20 caracteres: solo letras y números, sin tildes, símbolos ni espacios.</div>
+            <div class="invalid-feedback" id="regUsuarioAviso"></div>
+          </div>
+
+          <div class="mb-3">
+            <label for="regClave" class="form-label tipo-titulo text-uppercase fw-semibold" style="font-size:1.1rem">Contrase&ntilde;a</label>
+            <input type="password" class="form-control form-control-lg" id="regClave" autocomplete="new-password" required>
+            <div class="form-text">Mínimo 6 caracteres: solo letras y números, sin tildes, símbolos ni espacios.</div>
+            <div class="invalid-feedback" id="regClaveAviso"></div>
+          </div>
+
+          <div class="mb-4">
+            <label for="regClave2" class="form-label tipo-titulo text-uppercase fw-semibold" style="font-size:1.1rem">Repite la contrase&ntilde;a</label>
+            <input type="password" class="form-control form-control-lg" id="regClave2" autocomplete="new-password" required>
+            <div class="invalid-feedback">Las contraseñas no coinciden.</div>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-lg w-100 tipo-titulo text-uppercase fw-semibold"
+                  id="btnRegistrar" style="min-height:58px;font-size:1.4rem;letter-spacing:.08em">
+            Crear perfil
+          </button>
+          <p class="small text-center mt-3 mb-0" style="color:var(--bs-secondary-color)">
+            Entras como fisioterapeuta. El administrador puede cambiar tu rol.
+          </p>
+          <p class="text-center mt-3 mb-0">
+            ¿Ya tienes perfil?
+            <button type="button" class="btn btn-link p-0 align-baseline fw-semibold" id="irLogin">Ingresar</button>
+          </p>
         </form>
 
       </div>
@@ -342,19 +412,54 @@ body{
         Panel de operación &middot; FT-2
       </p>
     </div>
+    <!-- Quien soy: nombre y rol -->
+    <div class="d-flex align-items-center gap-2 border rounded-3 bg-body px-2 py-1 overflow-hidden" style="min-height:40px;max-width:100%">
+      <span class="control-inicial perfil-inicial" id="perfilInicial" aria-hidden="true">&mdash;</span>
+      <div class="lh-sm overflow-hidden">
+        <div class="fw-semibold text-truncate" id="perfilNombre" style="max-width:170px">&mdash;</div>
+        <div class="tipo-dato text-uppercase" id="perfilRol" style="font-size:.68rem;letter-spacing:.08em;color:var(--bs-secondary-color)">&mdash;</div>
+      </div>
+    </div>
     <button type="button" class="btn btn-outline-secondary d-inline-flex align-items-center gap-2" id="btnBloqueo" aria-pressed="false">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
         <rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>
       </svg>
-      <span id="txtBloqueo">Bloquear</span>
+      <span class="texto-boton" id="txtBloqueo">Bloquear</span>
     </button>
     <button type="button" class="btn btn-outline-secondary d-inline-flex align-items-center gap-2" id="btnSalir">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M15 17l5-5-5-5"/><path d="M20 12H9"/><path d="M12 19H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h6"/>
       </svg>
-      Salir
+      <span class="texto-boton">Salir</span>
     </button>
   </header>
+
+  <!-- Pestanas: solo las ve el administrador -->
+  <nav class="pestanas mb-3" id="pestanas" aria-label="Secciones del panel" hidden>
+    <div class="nav nav-pills gap-2 flex-nowrap overflow-auto" role="tablist">
+      <button type="button" class="nav-link active flex-fill d-inline-flex align-items-center justify-content-center gap-2" data-pestana="control" role="tab" aria-selected="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true" class="d-none d-sm-inline">
+          <path d="M3 14h18"/><path d="M3 14 8 8"/><path d="M21 14l-5-4"/><path d="M6 14v5"/><path d="M18 14v5"/>
+        </svg>
+        Control
+      </button>
+      <button type="button" class="nav-link flex-fill d-inline-flex align-items-center justify-content-center gap-2" data-pestana="registros" role="tab" aria-selected="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="d-none d-sm-inline">
+          <rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h3"/>
+        </svg>
+        Registros
+      </button>
+      <button type="button" class="nav-link flex-fill d-inline-flex align-items-center justify-content-center gap-2" data-pestana="usuarios" role="tab" aria-selected="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="d-none d-sm-inline">
+          <circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M17 4a4 4 0 0 1 0 8"/><path d="M22 21a7 7 0 0 0-4-6.3"/>
+        </svg>
+        Usuarios
+      </button>
+    </div>
+  </nav>
+
+  <!-- ===================== PESTANA: CONTROL ===================== -->
+  <div id="pestanaControl">
 
   <!-- Quien tiene el control ahora -->
   <div class="control-barra card border shadow-sm rounded-3 mb-3" id="controlBarra" data-estado="libre">
@@ -689,6 +794,95 @@ body{
          style="max-height:180px;overflow:auto;font-size:.8rem;line-height:1.7;color:var(--bs-secondary-color)">Esperando acciones...</pre>
   </details>
 
+  </div>
+
+  <!-- ===================== PESTANA: REGISTROS (solo administrador) ===================== -->
+  <div class="pestana-admin" id="pestanaRegistros" hidden>
+    <div class="row g-3 align-items-start">
+
+      <div class="col-12 col-lg-4">
+        <section class="card border shadow-sm rounded-4" style="border-top:4px solid var(--altura)!important" id="tarjetaPaciente">
+          <div class="card-body p-3 p-md-4">
+            <h2 class="tipo-titulo text-uppercase mb-3" id="tituloPaciente" style="font-size:1.5rem;font-weight:600">Nuevo registro</h2>
+            <form id="formPaciente" novalidate>
+              <div class="mb-3">
+                <label for="pacNombre" class="form-label tipo-titulo text-uppercase fw-semibold" style="font-size:1.05rem">Paciente</label>
+                <input type="text" class="form-control form-control-lg" id="pacNombre" maxlength="80"
+                       autocomplete="off" autocapitalize="words" placeholder="Nombre completo" required>
+                <div class="invalid-feedback" id="pacNombreAviso">Escribe el nombre del paciente.</div>
+              </div>
+              <div class="mb-4">
+                <label for="pacEdad" class="form-label tipo-titulo text-uppercase fw-semibold" style="font-size:1.05rem">Edad</label>
+                <div class="input-group input-group-lg has-validation" style="max-width:220px">
+                  <input type="number" class="form-control tipo-dato" id="pacEdad" min="0" max="120" step="1"
+                         inputmode="numeric" autocomplete="off" required>
+                  <span class="input-group-text">años</span>
+                  <div class="invalid-feedback" id="pacEdadAviso">La edad debe ser un número entre 0 y 120.</div>
+                </div>
+              </div>
+              <div class="d-flex gap-2 flex-wrap">
+                <button type="submit" class="btn btn-primary btn-lg flex-fill tipo-titulo text-uppercase fw-semibold" id="btnGuardarPaciente"
+                        style="min-height:54px;font-size:1.25rem;letter-spacing:.06em">Guardar</button>
+                <button type="button" class="btn btn-outline-secondary btn-lg flex-fill tipo-titulo text-uppercase fw-semibold d-none" id="btnCancelarPaciente"
+                        style="min-height:54px;font-size:1.15rem;letter-spacing:.06em;border-width:2px">Cancelar</button>
+              </div>
+            </form>
+          </div>
+        </section>
+      </div>
+
+      <div class="col-12 col-lg-8">
+        <section class="card border shadow-sm rounded-4 overflow-hidden">
+          <div class="card-header bg-body d-flex align-items-center gap-2 flex-wrap p-3">
+            <h2 class="tipo-titulo text-uppercase mb-0 me-auto" style="font-size:1.5rem;font-weight:600">
+              Registros <span class="badge rounded-pill text-bg-secondary align-middle tipo-dato" id="cuentaPacientes" style="font-size:.8rem">0</span>
+            </h2>
+            <input type="search" class="form-control" id="buscarPaciente" placeholder="Buscar paciente" aria-label="Buscar paciente"
+                   autocomplete="off" style="max-width:260px">
+          </div>
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 tabla-admin">
+              <thead>
+                <tr>
+                  <th scope="col" class="ps-3">Paciente</th>
+                  <th scope="col">Edad</th>
+                  <th scope="col" class="d-none d-sm-table-cell">Registrado</th>
+                  <th scope="col" class="text-end pe-3"><span class="visually-hidden">Acciones</span></th>
+                </tr>
+              </thead>
+              <tbody id="listaPacientes"></tbody>
+            </table>
+          </div>
+          <p class="text-center py-4 mb-0 d-none" id="sinPacientes" style="color:var(--bs-secondary-color)">Todavía no hay registros.</p>
+        </section>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ===================== PESTANA: USUARIOS (solo administrador) ===================== -->
+  <div class="pestana-admin" id="pestanaUsuarios" hidden>
+    <section class="card border shadow-sm rounded-4">
+      <div class="card-header bg-body d-flex align-items-center gap-2 flex-wrap p-3 rounded-top-4">
+        <h2 class="tipo-titulo text-uppercase mb-0 me-auto" style="font-size:1.5rem;font-weight:600">
+          Perfiles <span class="badge rounded-pill text-bg-secondary align-middle tipo-dato" id="cuentaUsuarios" style="font-size:.8rem">0</span>
+        </h2>
+        <span class="small" style="color:var(--bs-secondary-color)">Cada persona crea su perfil al entrar. Aquí cambias su rol.</span>
+      </div>
+      <table class="table table-hover align-middle mb-0 tabla-admin">
+        <thead>
+          <tr>
+            <th scope="col" class="ps-3">Perfil</th>
+            <th scope="col">Rol</th>
+            <th scope="col" class="d-none d-md-table-cell">Creado</th>
+            <th scope="col" class="text-end pe-3"><span class="visually-hidden">Acciones</span></th>
+          </tr>
+        </thead>
+        <tbody id="listaUsuarios"></tbody>
+      </table>
+    </section>
+  </div>
+
   <p class="visually-hidden" id="anuncio" role="status" aria-live="polite"></p>
 </div>
 
@@ -830,6 +1024,54 @@ body{
   </div>
 </div>
 
+<!-- =====================================================================
+     MODALES DE ADMINISTRACION
+     ===================================================================== -->
+
+<!-- 6 · Confirmar un cambio (borrar, desactivar, cambiar rol) -->
+<div class="modal fade" id="modalConfirmar" tabindex="-1" aria-labelledby="tConfirmar" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4" style="border-top:6px solid var(--bs-danger)" id="confirmarCaja">
+      <div class="modal-body p-4 d-flex flex-column gap-3">
+        <h2 class="tipo-titulo mb-0" id="tConfirmar" style="font-size:1.8rem;font-weight:600">¿Seguro?</h2>
+        <p class="mb-0" id="confirmarTexto" style="color:var(--bs-secondary-color)"></p>
+        <div class="d-flex gap-2 flex-wrap">
+          <button type="button" class="btn btn-danger btn-lg flex-fill tipo-titulo text-uppercase fw-semibold" id="btnConfirmarSi"
+                  style="min-height:58px;font-size:1.3rem;letter-spacing:.06em">Confirmar</button>
+          <button type="button" class="btn btn-outline-secondary btn-lg flex-fill tipo-titulo text-uppercase fw-semibold" id="btnConfirmarNo"
+                  style="min-height:58px;font-size:1.2rem;letter-spacing:.06em;border-width:2px">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 7 · Contrasena nueva para otro perfil -->
+<div class="modal fade" id="modalClave" tabindex="-1" aria-labelledby="tClave" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4" style="border-top:6px solid var(--altura)">
+      <form class="modal-body p-4 d-flex flex-column gap-3" id="formClave" novalidate>
+        <h2 class="tipo-titulo mb-0" id="tClave" style="font-size:1.8rem;font-weight:600">
+          Contraseña nueva para <span id="claveNombre"></span>
+        </h2>
+        <p class="mb-0" style="color:var(--bs-secondary-color)">Díctasela a la persona: con ella entra a partir de ahora.</p>
+        <div>
+          <label for="claveNueva" class="form-label tipo-titulo text-uppercase fw-semibold" style="font-size:1.05rem">Contrase&ntilde;a nueva</label>
+          <input type="text" class="form-control form-control-lg tipo-dato" id="claveNueva" autocomplete="off" spellcheck="false" autocapitalize="none">
+          <div class="form-text">Mínimo 6 caracteres: solo letras y números, sin tildes, símbolos ni espacios.</div>
+          <div class="invalid-feedback" id="claveNuevaAviso"></div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <button type="submit" class="btn btn-primary btn-lg flex-fill tipo-titulo text-uppercase fw-semibold"
+                  style="min-height:58px;font-size:1.3rem;letter-spacing:.06em">Cambiar</button>
+          <button type="button" class="btn btn-outline-secondary btn-lg flex-fill tipo-titulo text-uppercase fw-semibold" id="btnClaveNo"
+                  style="min-height:58px;font-size:1.2rem;letter-spacing:.06em;border-width:2px">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <!-- Toasts de Bootstrap -->
 <div class="toast-container position-fixed top-0 start-50 translate-middle-x p-3 zona-toasts" id="zonaToasts"></div>
 
@@ -944,8 +1186,8 @@ body{
   function conSigno(n){ return (n > 0 ? '+' : '') + n; }
 
   /* Quien esta operando la camilla ahora mismo. Lo dicta el servidor. */
-  var control = { titular: null, soyYo: false, conectado: true };
-  var sesion  = { usuario: null };
+  var control = { titular: null, usuario: null, soyYo: false, conectado: true };   // titular: nombre que se muestra
+  var sesion  = { usuario: null, nombre: null, rol: null };
 
   /* Mover exige tener el control. El PARO no: ese nunca depende de esto. */
   function puedeMover(){
@@ -1394,10 +1636,16 @@ body{
   /* ---------- SALIDA: del panel hacia el servidor ---------- */
   var SERVIDOR = {
     // POST /api/login   {usuario, clave}
-    //   -> {ok:true, usuario:"Antonio", sesion:"token", control:{titular:"Ana"|null}}
+    //   -> {ok:true, usuario:"antonio", nombre:"Antonio", rol:"admin"|"fisio", sesion:"token",
+    //       control:{titular:"Ana"|null, usuario:"ana"|null}}
     //   -> {ok:false, mensaje:"..."}
     login: function(usuario, clave){
       return llamar('/api/login', { usuario: usuario, clave: clave }, 8000);
+    },
+    // POST /api/registro {usuario, nombre, clave}   perfil nuevo (fisioterapeuta) y entra
+    //   -> igual que login, o {ok:false, campo:"usuario"|"nombre"|"clave", mensaje:"..."}
+    registro: function(usuario, nombre, clave){
+      return llamar('/api/registro', { usuario: usuario, nombre: nombre, clave: clave }, 8000);
     },
 
     // POST /api/logout          libera el control si lo tenia
@@ -1448,8 +1696,9 @@ body{
 
   /* ---------- ENTRADA: del servidor hacia el panel ----------
      GET /api/estado responde:
-       { usuario:"Antonio"|null,          null si la sesion ya no existe
-         control:{titular:"Ana"|null},
+       { usuario:"antonio"|null,          null si la sesion ya no existe
+         nombre:"Antonio", rol:"admin"|"fisio",
+         control:{titular:"Ana"|null, usuario:"ana"|null},
          paro:false, simulacion:true,
          solicitud:{id, usuario}|null,    solo le llega al titular
          respuesta:{aceptada, usuario}|null,   solo al que pidio, una vez
@@ -1460,7 +1709,7 @@ body{
   function recibir(e){
     if (reanudar) {
       reanudar = false;
-      if (e.usuario) entrarAlPanel(e.usuario, e.control);
+      if (e.usuario) entrarAlPanel(e, e.control);
       else guardarToken('');
       return;
     }
@@ -1472,8 +1721,11 @@ body{
     }
     if (vistaPanel.hidden) return;
 
-    // {control:{titular:"Ana"|null}}   cada vez que cambia quien tiene el control
-    if ((e.control.titular || null) !== control.titular) {
+    // {rol}   el administrador puede cambiarlo mientras la pagina esta abierta
+    if (e.rol !== sesion.rol) aplicarRol(e.rol);
+
+    // {control:{titular:"Ana"|null, usuario:"ana"|null}}   cada vez que cambia quien tiene el control
+    if ((e.control.usuario || null) !== control.usuario) {
       registrar('← control: ' + (e.control.titular || 'nadie') + '  (yo: ' + sesion.usuario + ')');
       aplicarControl(e.control);
     }
@@ -1567,7 +1819,8 @@ body{
      control es una decision, no se cierra por accidente. */
   var MODALES = {};
   var modalActivo = null;
-  ['modalTomar', 'modalSolicitar', 'modalEsperando', 'modalEntrante', 'modalSinConexion'].forEach(function(id){
+  ['modalTomar', 'modalSolicitar', 'modalEsperando', 'modalEntrante', 'modalSinConexion',
+   'modalConfirmar', 'modalClave'].forEach(function(id){
     var nodo = document.getElementById(id);
     MODALES[id] = new bootstrap.Modal(nodo, { backdrop: 'static', keyboard: false });
     nodo.addEventListener('hidden.bs.modal', function(){
@@ -1629,7 +1882,7 @@ body{
   }
 
   function pintarParoFlotante(){
-    var visible = vistaPanel.hidden || !!modalActivo;
+    var visible = vistaPanel.hidden || !!modalActivo || pestana !== 'control';
     btnParoFlot.classList.toggle('d-none', !visible);
     btnParoFlot.classList.toggle('btn-danger', !paro);
     btnParoFlot.classList.toggle('btn-light', paro);
@@ -1680,7 +1933,8 @@ body{
   function aplicarControl(datos){
     var teniaYo = control.soyYo;
     control.titular = datos.titular || null;
-    control.soyYo = !!control.titular && control.titular === sesion.usuario;
+    control.usuario = datos.usuario || null;
+    control.soyYo = !!control.usuario && control.usuario === sesion.usuario;
 
     if (control.soyYo && (modalActivo === 'modalEsperando' || modalActivo === 'modalTomar')) cerrarModal();
 
@@ -1773,19 +2027,49 @@ body{
   });
 
   /* =====================================================================
-     8c. LOGIN Y SESION
+     8c. LOGIN, PERFIL NUEVO Y SESION
      ===================================================================== */
   var formLogin    = document.getElementById('formLogin');
+  var formRegistro = document.getElementById('formRegistro');
   var loginAlerta  = document.getElementById('loginAlerta');
   var btnIngresar  = document.getElementById('btnIngresar');
+  var btnRegistrar = document.getElementById('btnRegistrar');
   var campoUsuario = document.getElementById('loginUsuario');
   var campoClave   = document.getElementById('loginClave');
+  /* Usuario y contrasena: solo letras y numeros, sin tildes, ñ, simbolos ni espacios (igual en basedatos.py) */
+  var SOLO_LETRAS_NUMEROS = /^[A-Za-z0-9]+$/;
+  var AVISO_CARACTERES = 'Solo letras y números, sin tildes, símbolos ni espacios.';
+  var SOLO_LETRAS = /^[A-Za-z]+$/;   // el nombre que ven los demas: ni numeros
+  function revisarClave(clave){
+    if (!SOLO_LETRAS_NUMEROS.test(clave)) return clave ? AVISO_CARACTERES : 'Escribe la contraseña.';
+    if (clave.length < 6) return 'La contraseña debe tener al menos 6 caracteres.';
+    return null;
+  }
+
+  var REG = {
+    nombre:  document.getElementById('regNombre'),
+    usuario: document.getElementById('regUsuario'),
+    clave:   document.getElementById('regClave'),
+    clave2:  document.getElementById('regClave2')
+  };
 
   function avisoLogin(texto, tipo){
     loginAlerta.classList.remove('d-none', 'alert-danger', 'alert-success');
     loginAlerta.classList.add(tipo === 'ok' ? 'alert-success' : 'alert-danger');
     loginAlerta.textContent = texto;
   }
+
+  /* Un solo cuadro: o se entra, o se crea el perfil */
+  function mostrarFormulario(cual){
+    var registro = cual === 'registro';
+    formLogin.hidden = registro;
+    formRegistro.hidden = !registro;
+    document.getElementById('loginSubtitulo').textContent = registro ? 'Crear perfil nuevo' : 'Acceso al panel de operación';
+    loginAlerta.classList.add('d-none');
+    (registro ? REG.nombre : campoUsuario).focus();
+  }
+  document.getElementById('irRegistro').addEventListener('click', function(){ mostrarFormulario('registro'); });
+  document.getElementById('irLogin').addEventListener('click', function(){ mostrarFormulario('login'); });
 
   document.getElementById('verClave').addEventListener('click', function(){
     var mostrando = campoClave.type === 'text';
@@ -1795,6 +2079,21 @@ body{
     campoClave.focus();
   });
 
+  function ocupado(boton, texto){
+    boton.disabled = !!texto;
+    boton.innerHTML = '';
+    if (texto) boton.insertAdjacentHTML('beforeend', '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>');
+    boton.appendChild(document.createTextNode(texto || boton.dataset.texto));
+  }
+  btnIngresar.dataset.texto = 'Ingresar';
+  btnRegistrar.dataset.texto = 'Crear perfil';
+
+  /* Respuesta buena de /api/login o /api/registro: al panel */
+  function entrar(r){
+    avisoLogin('Acceso correcto. Abriendo el panel...', 'ok');
+    setTimeout(function(){ entrarAlPanel(r, r.control, r.sesion); }, 650);
+  }
+
   formLogin.addEventListener('submit', function(e){
     e.preventDefault();
     var usuario = campoUsuario.value.trim();
@@ -1803,53 +2102,92 @@ body{
     campoUsuario.classList.remove('is-invalid');
     campoClave.classList.remove('is-invalid');
 
-    if (!usuario) { campoUsuario.classList.add('is-invalid'); campoUsuario.focus(); return; }
-    if (!clave)   { campoClave.classList.add('is-invalid'); campoClave.focus(); return; }
+    if (!usuario) return marcarCampo(campoUsuario, 'Escribe tu usuario.');
+    if (!SOLO_LETRAS_NUMEROS.test(usuario)) return marcarCampo(campoUsuario, AVISO_CARACTERES);
+    if (!clave) return marcarCampo(campoClave, 'Escribe tu contraseña.');
+    if (!SOLO_LETRAS_NUMEROS.test(clave)) return marcarCampo(campoClave, AVISO_CARACTERES);
 
     loginAlerta.classList.add('d-none');
-    btnIngresar.disabled = true;
-    btnIngresar.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Entrando...';
+    ocupado(btnIngresar, 'Entrando...');
 
     SERVIDOR.login(usuario, clave).then(function(r){
-      btnIngresar.disabled = false;
-      btnIngresar.textContent = 'Ingresar';
+      ocupado(btnIngresar);
       if (!r || !r.ok) {
-        avisoLogin((r && r.mensaje) || 'Contraseña incorrecta.', 'error');
-        if (r && r.campo === 'usuario') {   // nombre vacio o ya en uso: la contrasena estaba bien
-          campoUsuario.focus();
-          campoUsuario.select();
-          return;
-        }
+        avisoLogin((r && r.mensaje) || 'Usuario o contraseña incorrectos.', 'error');
         campoClave.value = '';
         campoClave.classList.add('is-invalid');
         campoClave.focus();
         return;
       }
-      avisoLogin('Acceso correcto. Abriendo el panel...', 'ok');
-      setTimeout(function(){ entrarAlPanel(r.usuario || usuario, r.control, r.sesion); }, 650);
+      entrar(r);
     }).catch(function(){
-      btnIngresar.disabled = false;
-      btnIngresar.textContent = 'Ingresar';
+      ocupado(btnIngresar);
       avisoLogin('No se pudo contactar con la camilla. Revisa la conexión.', 'error');
     });
   });
 
-  function entrarAlPanel(usuario, estadoControl, token){
-    sesion.usuario = usuario;
+  function marcarCampo(campo, texto){
+    var aviso = document.getElementById(campo.id + 'Aviso');
+    if (aviso && texto) aviso.textContent = texto;
+    campo.classList.add('is-invalid');
+    campo.focus();
+  }
+
+  formRegistro.addEventListener('submit', function(e){
+    e.preventDefault();
+    var nombre  = REG.nombre.value.trim();
+    var usuario = REG.usuario.value.trim().toLowerCase();
+    Object.keys(REG).forEach(function(k){ REG[k].classList.remove('is-invalid'); });
+
+    if (!nombre) return marcarCampo(REG.nombre, 'Escribe tu nombre.');
+    if (!SOLO_LETRAS.test(nombre)) return marcarCampo(REG.nombre, 'Solo letras, sin números, tildes, símbolos ni espacios.');
+    if (nombre.length < 2) return marcarCampo(REG.nombre, 'El nombre debe tener al menos 2 letras.');
+    if (!SOLO_LETRAS_NUMEROS.test(usuario)) return marcarCampo(REG.usuario, AVISO_CARACTERES);
+    if (usuario.length < 3) return marcarCampo(REG.usuario, 'El usuario debe tener al menos 3 caracteres.');
+    var errorClave = revisarClave(REG.clave.value);
+    if (errorClave) return marcarCampo(REG.clave, errorClave);
+    if (REG.clave.value !== REG.clave2.value) return marcarCampo(REG.clave2);
+
+    loginAlerta.classList.add('d-none');
+    ocupado(btnRegistrar, 'Creando perfil...');
+
+    SERVIDOR.registro(usuario, nombre, REG.clave.value).then(function(r){
+      ocupado(btnRegistrar);
+      if (!r || !r.ok) {
+        if (r && REG[r.campo]) marcarCampo(REG[r.campo], r.mensaje);
+        else avisoLogin((r && r.mensaje) || 'No se pudo crear el perfil.', 'error');
+        return;
+      }
+      formRegistro.reset();
+      entrar(r);
+    }).catch(function(){
+      ocupado(btnRegistrar);
+      avisoLogin('No se pudo contactar con la camilla. Revisa la conexión.', 'error');
+    });
+  });
+
+  /* perfil = {usuario, nombre, rol}: llega del login, del registro o al recargar la pagina */
+  function entrarAlPanel(perfil, estadoControl, token){
+    sesion.usuario = perfil.usuario;
+    sesion.nombre = perfil.nombre || perfil.usuario;
     if (token) guardarToken(token);
     vistaLogin.hidden = true;
     vistaPanel.hidden = false;
     loginAlerta.classList.add('d-none');
     campoClave.value = '';
     campoClave.classList.remove('is-invalid');
-    registrar('SESION INICIADA  usuario=' + usuario);
+    mostrarFormulario('login');
+    document.getElementById('perfilNombre').textContent = sesion.nombre;
+    document.getElementById('perfilInicial').textContent = sesion.nombre.charAt(0).toUpperCase();
+    aplicarRol(perfil.rol);
+    registrar('SESION INICIADA  usuario=' + sesion.usuario + '  rol=' + sesion.rol);
 
     conectar();
-    aplicarControl(estadoControl || { titular: null });
+    aplicarControl(estadoControl || { titular: null, usuario: null });
 
     /* Si no lo tiene nadie, el que entra se queda con el control.
        Si ya lo tiene otro, entra en solo lectura y se le ofrece pedirlo. */
-    if (!control.titular) {
+    if (!control.usuario) {
       SERVIDOR.tomarControl();   // el resultado llega con la consulta de estado
     } else if (!control.soyYo) {
       pedirControl();
@@ -1864,7 +2202,7 @@ body{
     salirDelPanel();
   }
 
-  /* El servidor ya no conoce la sesion (se reinicio o paso mucho tiempo) */
+  /* El servidor ya no conoce la sesion (se reinicio, entro desde otro dispositivo o lo desactivaron) */
   function sesionTerminada(){
     registrar('SESION VENCIDA');
     salirDelPanel();
@@ -1879,14 +2217,19 @@ body{
     guardarToken('');
     solicitudEntrante = null;
     sesion.usuario = null;
+    sesion.nombre = null;
+    aplicarRol(null);
+    olvidarAdmin();   // que no queden datos de pacientes en la pagina
+    zonaToasts.innerHTML = '';   // ni avisos de la sesion anterior
     control.titular = null;
+    control.usuario = null;
     control.soyYo = false;
     control.conectado = true;
     vistaPanel.hidden = true;
     vistaLogin.hidden = false;
     loginAlerta.classList.add('d-none');
     campoClave.value = '';
-    campoUsuario.focus();
+    mostrarFormulario('login');
     pintar();
   }
   document.getElementById('btnSalir').addEventListener('click', cerrarSesion);
@@ -1901,7 +2244,305 @@ body{
     registrar(bloqueo ? 'CONTROLES BLOQUEADOS' : 'CONTROLES DESBLOQUEADOS');
     pintar();
   });
-  document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && !paro) activarParo(); });
+  document.addEventListener('keydown', function(e){
+    // En los formularios del administrador ESC solo cierra o borra; ahi no se esta moviendo nada
+    if (e.target.closest && e.target.closest('.pestana-admin, #modalClave, #modalConfirmar')) return;
+    if (e.key === 'Escape' && !paro) activarParo();
+  });
+
+  var ROLES = { admin: 'Administrador', fisio: 'Fisioterapeuta' };
+  var pestana = 'control';
+  var navPestanas = document.getElementById('pestanas');
+
+  var ADMIN = {
+    // POST /api/pacientes/lista            -> {ok, pacientes:[{id, nombre, edad, creado, creado_por}]}
+    pacientes:       function(){ return llamar('/api/pacientes/lista'); },
+    // POST /api/pacientes/guardar {id|null, nombre, edad}   id null = registro nuevo
+    guardarPaciente: function(p){ return llamar('/api/pacientes/guardar', p); },
+    // POST /api/pacientes/borrar {id}
+    borrarPaciente:  function(id){ return llamar('/api/pacientes/borrar', { id: id }); },
+    // POST /api/usuarios/lista             -> {ok, usuarios:[{id, usuario, nombre, rol, activo, creado}]}
+    usuarios:        function(){ return llamar('/api/usuarios/lista'); },
+    // POST /api/usuarios/{rol|activo|clave|borrar} {id, rol|activo|clave}   nunca el perfil propio
+    cambiarUsuario:  function(accion, datos){ return llamar('/api/usuarios/' + accion, datos); }
+  };
+
+  /* Texto de usuarios dentro de HTML: nunca se pega sin escapar */
+  function esc(t){
+    return String(t == null ? '' : t).replace(/[&<>"']/g, function(c){
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function sinTildes(t){ return String(t).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+
+  /* Respuesta de un pedido de administracion: true si salio bien */
+  function revisar(r){
+    if (r && r.ok) return true;
+    mostrarAviso((r && r.mensaje) || 'No se pudo contactar con la camilla. Revisa la conexión.', 'error');
+    return false;
+  }
+
+  function aplicarRol(rol){
+    sesion.rol = rol || null;
+    document.getElementById('perfilRol').textContent = ROLES[rol] || '';
+    navPestanas.hidden = rol !== 'admin';
+    if (rol !== 'admin' && pestana !== 'control') mostrarPestana('control');
+  }
+
+  function mostrarPestana(cual){
+    if (cual !== 'control') { detenerManual(); cancelarDestino(); }   // al salir de Control no queda nada moviendose
+    pestana = cual;
+    document.getElementById('pestanaControl').hidden = cual !== 'control';
+    document.getElementById('pestanaRegistros').hidden = cual !== 'registros';
+    document.getElementById('pestanaUsuarios').hidden = cual !== 'usuarios';
+    navPestanas.querySelectorAll('[data-pestana]').forEach(function(b){
+      var activa = b.dataset.pestana === cual;
+      b.classList.toggle('active', activa);
+      b.setAttribute('aria-selected', activa ? 'true' : 'false');
+    });
+    el.btnBloqueo.classList.toggle('d-none', cual !== 'control');
+    if (cual === 'registros') cargarPacientes();
+    if (cual === 'usuarios') cargarUsuarios();
+    pintarParoFlotante();
+  }
+  navPestanas.addEventListener('click', function(e){
+    var b = e.target.closest('[data-pestana]');
+    if (b && b.dataset.pestana !== pestana) mostrarPestana(b.dataset.pestana);
+  });
+
+  /* Modal de confirmacion: los textos van con textContent (pueden traer nombres) */
+  var alConfirmar = null;
+  function confirmar(titulo, texto, boton, peligro, accion){
+    document.getElementById('tConfirmar').textContent = titulo;
+    document.getElementById('confirmarTexto').textContent = texto;
+    var si = document.getElementById('btnConfirmarSi');
+    si.textContent = boton;
+    si.classList.toggle('btn-danger', peligro);
+    si.classList.toggle('btn-primary', !peligro);
+    document.getElementById('confirmarCaja').style.borderTopColor = peligro ? 'var(--bs-danger)' : 'var(--altura)';
+    alConfirmar = accion;
+    abrirModal('modalConfirmar');
+  }
+  document.getElementById('btnConfirmarSi').addEventListener('click', function(){
+    var accion = alConfirmar;
+    alConfirmar = null;
+    cerrarModal();
+    if (accion) accion();
+  });
+  document.getElementById('btnConfirmarNo').addEventListener('click', function(){ alConfirmar = null; cerrarModal(); });
+
+  /* ---------- Registros de pacientes ---------- */
+  var listaPacientes = [];
+  var editandoPaciente = null;   // id del registro que se esta editando (null = nuevo)
+  var formPaciente = document.getElementById('formPaciente');
+  var pacNombre = document.getElementById('pacNombre');
+  var pacEdad = document.getElementById('pacEdad');
+  var tablaPacientes = document.getElementById('listaPacientes');
+  var buscarPaciente = document.getElementById('buscarPaciente');
+
+  function cargarPacientes(){
+    ADMIN.pacientes().then(function(r){
+      if (!revisar(r)) return;
+      listaPacientes = r.pacientes;
+      pintarPacientes();
+    }, function(){ revisar(null); });
+  }
+
+  function pintarPacientes(){
+    var filtro = sinTildes(buscarPaciente.value.trim());
+    var filas = listaPacientes.filter(function(p){ return sinTildes(p.nombre).indexOf(filtro) !== -1; });
+    tablaPacientes.innerHTML = filas.map(function(p){
+      return '<tr>' +
+        '<td class="ps-3 fw-semibold text-break">' + esc(p.nombre) + '</td>' +
+        '<td class="tipo-dato text-nowrap">' + esc(p.edad) + '</td>' +
+        '<td class="d-none d-sm-table-cell tipo-dato small text-nowrap" style="color:var(--bs-secondary-color)">' + esc(p.creado) + '</td>' +
+        '<td class="text-end text-nowrap pe-3">' +
+          '<button type="button" class="btn btn-outline-secondary btn-sm me-1" data-editar="' + p.id + '" aria-label="Editar">' +
+            '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13 7 4 4"/></svg>' +
+          '</button>' +
+          '<button type="button" class="btn btn-outline-danger btn-sm" data-borrar="' + p.id + '" aria-label="Borrar">' +
+            '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/></svg>' +
+          '</button>' +
+        '</td></tr>';
+    }).join('');
+    document.getElementById('cuentaPacientes').textContent = listaPacientes.length;
+    var vacio = document.getElementById('sinPacientes');
+    vacio.textContent = listaPacientes.length ? 'Ningún paciente coincide con la búsqueda.' : 'Todavía no hay registros.';
+    vacio.classList.toggle('d-none', filas.length > 0);
+  }
+  buscarPaciente.addEventListener('input', pintarPacientes);
+
+  function editarPaciente(p){
+    editandoPaciente = p ? p.id : null;
+    pacNombre.value = p ? p.nombre : '';
+    pacEdad.value = p ? p.edad : '';
+    pacNombre.classList.remove('is-invalid');
+    pacEdad.classList.remove('is-invalid');
+    document.getElementById('tituloPaciente').textContent = p ? 'Editar registro' : 'Nuevo registro';
+    document.getElementById('btnGuardarPaciente').textContent = p ? 'Guardar cambios' : 'Guardar';
+    document.getElementById('btnCancelarPaciente').classList.toggle('d-none', !p);
+    if (p) {
+      document.getElementById('tarjetaPaciente').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      pacNombre.focus({ preventScroll: true });
+    }
+  }
+  document.getElementById('btnCancelarPaciente').addEventListener('click', function(){ editarPaciente(null); });
+
+  tablaPacientes.addEventListener('click', function(e){
+    var b = e.target.closest('[data-editar], [data-borrar]');
+    if (!b) return;
+    var id = parseInt(b.dataset.editar || b.dataset.borrar, 10);
+    var p = listaPacientes.filter(function(x){ return x.id === id; })[0];
+    if (!p) return;
+    if (b.dataset.editar) return editarPaciente(p);
+    confirmar('¿Borrar este registro?', 'Se borrará el registro de ' + p.nombre + '. No se puede deshacer.',
+      'Borrar', true, function(){
+        ADMIN.borrarPaciente(p.id).then(function(r){
+          if (!revisar(r)) return;
+          if (editandoPaciente === p.id) editarPaciente(null);
+          mostrarAviso('Registro borrado', 'ok');
+          cargarPacientes();
+        }, function(){ revisar(null); });
+      });
+  });
+
+  formPaciente.addEventListener('submit', function(e){
+    e.preventDefault();
+    var nombre = pacNombre.value.trim().replace(/\s+/g, ' ');
+    var edad = Number(pacEdad.value);
+    pacNombre.classList.remove('is-invalid');
+    pacEdad.classList.remove('is-invalid');
+    if (nombre.length < 2) return marcarCampo(pacNombre, 'Escribe el nombre del paciente.');
+    if (pacEdad.value === '' || !Number.isInteger(edad) || edad < 0 || edad > 120) {
+      return marcarCampo(pacEdad, 'La edad debe ser un número entre 0 y 120.');
+    }
+    var boton = document.getElementById('btnGuardarPaciente');
+    boton.disabled = true;
+    ADMIN.guardarPaciente({ id: editandoPaciente, nombre: nombre, edad: edad }).then(function(r){
+      boton.disabled = false;
+      if (r && !r.ok && r.campo === 'nombre') return marcarCampo(pacNombre, r.mensaje);
+      if (r && !r.ok && r.campo === 'edad') return marcarCampo(pacEdad, r.mensaje);
+      if (!revisar(r)) return;
+      mostrarAviso(editandoPaciente ? 'Cambios guardados' : 'Registro guardado', 'ok');
+      editarPaciente(null);
+      cargarPacientes();
+      pacNombre.focus();
+    }, function(){ boton.disabled = false; revisar(null); });
+  });
+
+  /* ---------- Perfiles ---------- */
+  var listaUsuarios = [];
+  var tablaUsuarios = document.getElementById('listaUsuarios');
+  var perfilClave = null;   // a quien se le cambia la contrasena
+
+  function cargarUsuarios(){
+    ADMIN.usuarios().then(function(r){
+      if (!revisar(r)) return;
+      listaUsuarios = r.usuarios;
+      pintarUsuarios();
+    }, function(){ revisar(null); });
+  }
+
+  function opcion(accion, id, texto, clase){
+    return '<li><button type="button" class="dropdown-item py-2 ' + (clase || '') + '" data-accion="' + accion + '" data-id="' + id + '">' +
+           texto + '</button></li>';
+  }
+
+  function pintarUsuarios(){
+    tablaUsuarios.innerHTML = listaUsuarios.map(function(u){
+      var yo = u.usuario === sesion.usuario;
+      var rol = '<span class="badge rounded-pill ' + (u.rol === 'admin' ? 'text-bg-primary' : 'text-bg-light border') + '">' +
+                esc(ROLES[u.rol] || u.rol) + '</span>';
+      if (!u.activo) rol += ' <span class="badge rounded-pill text-bg-danger">Desactivado</span>';
+      var acciones = yo
+        ? '<span class="badge rounded-pill text-bg-success">Tú</span>'
+        : '<div class="dropdown">' +
+            '<button type="button" class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown" ' +
+                    'data-bs-popper-config=\'{"strategy":"fixed"}\' aria-expanded="false">Opciones</button>' +
+            '<ul class="dropdown-menu dropdown-menu-end shadow">' +
+              opcion('rol', u.id, u.rol === 'admin' ? 'Hacer fisioterapeuta' : 'Hacer administrador') +
+              opcion('activo', u.id, u.activo ? 'Desactivar' : 'Activar') +
+              opcion('clave', u.id, 'Cambiar contraseña') +
+              '<li><hr class="dropdown-divider"></li>' +
+              opcion('borrar', u.id, 'Borrar perfil', 'text-danger') +
+            '</ul></div>';
+      return '<tr' + (u.activo ? '' : ' class="opacity-75"') + '>' +
+        '<td class="ps-3"><div class="fw-semibold text-break">' + esc(u.nombre) + '</div>' +
+          '<div class="tipo-dato small text-break" style="color:var(--bs-secondary-color)">@' + esc(u.usuario) + '</div></td>' +
+        '<td>' + rol + '</td>' +
+        '<td class="d-none d-md-table-cell tipo-dato small text-nowrap" style="color:var(--bs-secondary-color)">' + esc(u.creado) + '</td>' +
+        '<td class="text-end pe-3">' + acciones + '</td></tr>';
+    }).join('');
+    document.getElementById('cuentaUsuarios').textContent = listaUsuarios.length;
+  }
+
+  function cambiarUsuario(accion, datos, aviso){
+    ADMIN.cambiarUsuario(accion, datos).then(function(r){
+      if (!revisar(r)) return;
+      mostrarAviso(aviso, 'ok');
+      cargarUsuarios();
+    }, function(){ revisar(null); });
+  }
+
+  tablaUsuarios.addEventListener('click', function(e){
+    var b = e.target.closest('[data-accion]');
+    if (!b) return;
+    var id = parseInt(b.dataset.id, 10);
+    var u = listaUsuarios.filter(function(x){ return x.id === id; })[0];
+    if (!u) return;
+    var accion = b.dataset.accion;
+    if (accion === 'rol' && u.rol !== 'admin') {
+      confirmar('¿Hacer administrador a ' + u.nombre + '?',
+        'Podrá ver los registros de pacientes y manejar los perfiles.', 'Hacer administrador', false,
+        function(){ cambiarUsuario('rol', { id: id, rol: 'admin' }, u.nombre + ' ahora es administrador'); });
+    } else if (accion === 'rol') {
+      confirmar('¿Quitarle el rol de administrador a ' + u.nombre + '?',
+        'Queda como fisioterapeuta: ya no verá los registros ni los perfiles.', 'Quitar rol', true,
+        function(){ cambiarUsuario('rol', { id: id, rol: 'fisio' }, u.nombre + ' ahora es fisioterapeuta'); });
+    } else if (accion === 'activo' && !u.activo) {
+      cambiarUsuario('activo', { id: id, activo: true }, u.nombre + ' puede entrar otra vez');
+    } else if (accion === 'activo') {
+      confirmar('¿Desactivar a ' + u.nombre + '?',
+        'No podrá entrar hasta que lo actives otra vez. Si está conectado, su sesión se cierra.', 'Desactivar', true,
+        function(){ cambiarUsuario('activo', { id: id, activo: false }, u.nombre + ' quedó desactivado'); });
+    } else if (accion === 'borrar') {
+      confirmar('¿Borrar el perfil de ' + u.nombre + '?',
+        'Se borra para siempre. Si está conectado, su sesión se cierra. Los registros que agregó se quedan.', 'Borrar', true,
+        function(){ cambiarUsuario('borrar', { id: id }, 'Perfil de ' + u.nombre + ' borrado'); });
+    } else if (accion === 'clave') {
+      perfilClave = u;
+      document.getElementById('claveNombre').textContent = u.nombre;
+      document.getElementById('claveNueva').value = '';
+      document.getElementById('claveNueva').classList.remove('is-invalid');
+      abrirModal('modalClave');
+    }
+  });
+
+  document.getElementById('modalClave').addEventListener('shown.bs.modal', function(){
+    document.getElementById('claveNueva').focus();
+  });
+  document.getElementById('btnClaveNo').addEventListener('click', cerrarModal);
+  document.getElementById('formClave').addEventListener('submit', function(e){
+    e.preventDefault();
+    var campo = document.getElementById('claveNueva');
+    campo.classList.remove('is-invalid');
+    var errorClave = revisarClave(campo.value);
+    if (errorClave) return marcarCampo(campo, errorClave);
+    var u = perfilClave;
+    cerrarModal();
+    cambiarUsuario('clave', { id: u.id, clave: campo.value }, 'Contraseña de ' + u.nombre + ' cambiada');
+    campo.value = '';
+  });
+
+  /* Al salir no queda nada del administrador en la pagina */
+  function olvidarAdmin(){
+    listaPacientes = [];
+    listaUsuarios = [];
+    tablaPacientes.innerHTML = '';
+    tablaUsuarios.innerHTML = '';
+    buscarPaciente.value = '';
+    editarPaciente(null);
+  }
 
   /* =====================================================================
      9. ARRANQUE

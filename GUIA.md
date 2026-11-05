@@ -2,7 +2,8 @@
 
 ## Qué hace
 
-- Una **página web** en la Raspberry con el panel de la camilla: inicio de sesión con **tu nombre** y la **contraseña del panel** (una sola para todos), dibujo de la camilla, botones de altura, cabeza y piernas, "Plano 0°" y **paro de emergencia**. El diseño y sus reglas vienen de `INTEGRACION.md`.
+- Una **página web** en la Raspberry con el panel de la camilla: **perfiles** con usuario y contraseña propios, dibujo de la camilla, botones de altura, cabeza y piernas, "Plano 0°" y **paro de emergencia**. El diseño y sus reglas vienen de `INTEGRACION.md`.
+- Dos roles: **fisioterapeuta** (usa la camilla) y **administrador** (además ve los **registros de pacientes** y maneja los perfiles).
 - De momento **no hay motores**: el panel funciona en **simulación** (el dibujo se mueve, la camilla no).
 - **Una sola persona controla la camilla a la vez.** Los demás la ven en solo lectura y pueden **pedir el control**; quien lo tiene decide si lo pasa.
 - La Raspberry puede crear su **propia red WiFi "Camilla"**. Al conectarse, el celular abre la página solo (como el WiFi de un hotel).
@@ -12,9 +13,9 @@
 | Archivo | Para qué |
 |---|---|
 | `web/servidor.py` | Servidor de la página: sesiones, control, paro y órdenes de movimiento (simuladas) |
-| `web/index.html` | El panel completo en una sola página: inicio de sesión, control y avisos |
-| `web/clave.py` | Pone o cambia la contraseña del panel |
-| `web/clave.json` | La contraseña del panel, cifrada. **No se sube a git** (está en `.gitignore`) |
+| `web/index.html` | El panel completo en una sola página: inicio de sesión, perfil nuevo, control, avisos y las pestañas del administrador |
+| `web/basedatos.py` | Perfiles y registros de pacientes. Desde la terminal: nombrar administrador y cambiar contraseñas |
+| `web/camilla.db` | La base de datos (SQLite): perfiles con contraseñas cifradas y registros de pacientes. Se crea sola. **No se sube a git** (está en `.gitignore`) |
 | `web/vendor/` | Bootstrap 5.3.3 y las fuentes (Barlow Condensed, IBM Plex), guardados en el proyecto para no usar internet |
 | `INTEGRACION.md` | Contrato del diseño (reglas del control, mensajes). Aquí esos mensajes van por HTTP, no por WebSocket |
 | `red/instalar_red.sh` | Instala hostapd y crea la configuración de la red. Se corre **una vez** con `sudo` |
@@ -26,24 +27,42 @@
 - `servidor.py` **no arranca solo**: lo enciende `encender_red.sh` junto con la red, y ENTER lo apaga. Para probar sin la red se corre a mano (ver **Uso**). Puerto **8000**. Corre con tu usuario, sin `sudo`.
 - Todo es HTTP con lo que ya trae Python, sin WebSocket y sin instalar nada:
   - La página pregunta `GET /api/estado` **cada segundo**: quién tiene el control, paro, pedidos de control, posición.
-  - Las órdenes van por `POST`: `/api/login`, `/api/logout`, `/api/control/tomar`, `/api/control/solicitar`, `/api/control/cancelar`, `/api/control/responder`, `/api/control/liberar`, `/api/mover`, `/api/detener`, `/api/paso` y `/api/paro`.
+  - Las órdenes van por `POST`: `/api/login`, `/api/registro`, `/api/logout`, `/api/control/tomar`, `/api/control/solicitar`, `/api/control/cancelar`, `/api/control/responder`, `/api/control/liberar`, `/api/mover`, `/api/detener`, `/api/paso` y `/api/paro`.
+  - Solo administrador: `/api/pacientes/lista`, `/api/pacientes/guardar`, `/api/pacientes/borrar`, `/api/usuarios/lista`, `/api/usuarios/rol`, `/api/usuarios/activo`, `/api/usuarios/clave` y `/api/usuarios/borrar`.
   - Por eso los avisos llegan a los otros celulares en uno o dos segundos.
 - Si la página no recibe respuesta 3 veces seguidas, muestra **"Sin conexión con la camilla"** y bloquea el movimiento.
 - Bootstrap y las fuentes están en `web/vendor/` y los entrega el mismo servidor: el panel se ve igual en la red Camilla, que no tiene internet.
 - La página se ve siempre en **modo claro**, aunque el celular esté en modo oscuro (`color-scheme: only light` y `data-bs-theme="light"`).
 
-### Inicio de sesión
-- Cada quien escribe **su nombre** (de 1 a 30 letras) y la **contraseña del panel**, que es la misma para todos.
-- El nombre solo sirve para ver quién tiene el control. La contraseña evita que entre cualquiera que esté en la red.
-- La contraseña se guarda **cifrada** (PBKDF2) en `web/clave.json`, nunca en texto. Se pone o se cambia con `web/clave.py` (ver **Uso**).
-- Con la contraseña mala sale "Contraseña incorrecta." y el servidor espera 1 s antes de contestar (frena a quien intente adivinarla).
-- **Los nombres no se repiten:** si alguien ya está conectado como "Ana", nadie más puede entrar como "Ana" (tampoco "ana"). Así nadie se queda con el control de otro sin pedirlo. Cuando "Ana" lleva 10 s sin dar señales, el nombre queda libre.
-- La sesión es **por pestaña**: recargar la página no la cierra, pero cerrar la pestaña sí. Dos pestañas sirven para probar con dos nombres.
-- Si el servidor se reinicia, todas las sesiones se pierden y la página vuelve al inicio de sesión.
-- Con una sola contraseña para todos: si alguien deja de tener permiso, hay que cambiarla.
+### Perfiles e inicio de sesión
+- **Cualquiera puede crear su perfil** en la página ("Crear perfil"): nombre (el que ven los demás, de 2 a 40 **solo letras**), usuario (de 3 a 20) y contraseña (mínimo 6) con **solo letras y números**. Ninguno acepta tildes, ñ, símbolos ni espacios. Entra como **fisioterapeuta**.
+- Se entra con **usuario y contraseña**. El usuario no distingue mayúsculas (`Ana` = `ana`).
+- Las contraseñas se guardan **cifradas** (PBKDF2) en `web/camilla.db`, nunca en texto.
+- Con usuario o contraseña mala sale "Usuario o contraseña incorrectos." y el servidor espera 1 s antes de contestar (frena a quien intente adivinar).
+- **Un perfil, una sesión:** si entras con tu usuario en otro celular o pestaña, la sesión anterior se cierra (ahí sale "Tu sesión terminó").
+- La sesión es **por pestaña**: recargar la página no la cierra, pero cerrar la pestaña sí. Para probar el control con dos personas hacen falta dos perfiles.
+- Si el servidor se reinicia, todas las sesiones se pierden y la página vuelve al inicio de sesión. Los perfiles y registros **no** se pierden: están en `camilla.db`.
+
+### Roles
+| | Fisioterapeuta | Administrador |
+|---|---|---|
+| Usar la camilla (con las reglas del control) | Sí | Sí |
+| Pestaña **Registros** (pacientes) | No | Sí |
+| Pestaña **Usuarios** (perfiles) | No | Sí |
+
+- El **primer administrador** se nombra desde la terminal (ver **Uso**). Después, un administrador puede hacer administrador a otros desde la pestaña **Usuarios**.
+- En **Usuarios**, por cada perfil: hacer administrador / fisioterapeuta, desactivar / activar, cambiar contraseña y borrar. El **propio perfil** no se puede cambiar ahí (así siempre queda al menos un administrador).
+- Desactivar o borrar un perfil cierra su sesión al momento; si tenía el control, se libera. Un cambio de rol se ve en su pantalla en un segundo.
+- El servidor revisa el rol en cada pedido: aunque un fisioterapeuta escriba las direcciones a mano, no ve nada.
+
+### Registros de pacientes
+- Por ahora cada registro tiene **paciente** (nombre) y **edad** (0 a 120). Se guarda también la fecha y quién lo agregó.
+- En la pestaña **Registros** el administrador agrega, busca, edita y borra (borrar pide confirmación).
+- Son **datos de salud**: solo están en `web/camilla.db` (solo tu usuario de la Raspberry lo puede leer) y **nunca** se suben a git. En el registro del sistema solo queda "agregó el registro #N", sin el nombre del paciente.
+- La página va por HTTP sin cifrar: quien tenga la clave del WiFi "Camilla" podría espiar lo que viaja. Para pruebas está bien; antes de usarla con pacientes reales hay que resolverlo.
 
 ### Quién tiene el control
-- El control es de una **persona** (el nombre con que entró), no del celular.
+- El control es de una **persona** (su perfil), no del celular. En pantalla se ve su nombre.
 - Al entrar: si nadie lo tiene, te lo quedas. Si otra persona lo tiene, entras en **solo lectura** y la página te ofrece **Solicitar el control**.
 - Al pedirlo, a quien lo tiene le sale un aviso con **Permitir / No permitir** y 30 s para decidir. Si no contesta, cuenta como **no**: el control nunca se pasa por silencio.
 - Si alguien suelta el control (o sale) mientras otro lo está pidiendo, pasa directo a quien lo pidió.
@@ -75,12 +94,12 @@
 
 ## Uso
 
-**Cambiar la contraseña del panel** (ya hay una puesta; sin ella no entra nadie):
+**Primer administrador** (una sola vez): crea tu perfil en la página con "Crear perfil" y luego:
 ```bash
 cd ~/Desktop/"Proyecto Camilla"
-python3 web/clave.py
+python3 web/basedatos.py admin TU_USUARIO
 ```
-Pide la nueva dos veces (mínimo 6 caracteres). No hace falta reiniciar el servidor. Si se olvida, no se puede ver: se pone una nueva con este mismo comando.
+Si tenías la página abierta, sal y vuelve a entrar para ver las pestañas **Registros** y **Usuarios**.
 
 **Encender la red:**
 ```bash
@@ -94,13 +113,15 @@ Pide la contraseña de `sudo` (no escribas `sudo` antes del script), enciende la
 cd ~/Desktop/"Proyecto Camilla"
 python3 web/servidor.py
 ```
-Abre `http://localhost:8000`. **Ctrl+C** apaga la página. Dos pestañas sirven para probar el control con dos nombres.
+Abre `http://localhost:8000`. **Ctrl+C** apaga la página. Dos pestañas con dos perfiles distintos sirven para probar el control.
 
 **Comandos útiles:**
 
 | Para | Comando |
 |---|---|
-| Cambiar la contraseña del panel | `python3 web/clave.py` |
+| Ver los perfiles y su rol | `python3 web/basedatos.py` |
+| Hacer administrador a alguien | `python3 web/basedatos.py admin USUARIO` |
+| Poner contraseña nueva a un perfil (p. ej. si se olvidó) | `python3 web/basedatos.py clave USUARIO` |
 | Ver si la página está encendida | `ss -ltn 'sport = :8000'` (si sale `LISTEN`, está encendida) |
 | Ver mensajes de la página en vivo (con la red encendida) | `journalctl -t python3 -f` |
 | Ver la clave del WiFi | `sudo grep wpa_passphrase /etc/hostapd/camilla.conf` |
@@ -112,7 +133,8 @@ Abre `http://localhost:8000`. **Ctrl+C** apaga la página. Dos pestañas sirven 
 |---|---|
 | `index.html` | Guardar y **recargar la página** en el navegador. No hace falta reiniciar. |
 | `servidor.py` | Apagar y volver a encender la página: ENTER y otra vez `./encender_red.sh`, o **Ctrl+C** y otra vez `python3 web/servidor.py` |
-| La contraseña del panel | Nada: el servidor lee `clave.json` en cada inicio de sesión. |
+| `basedatos.py` | Igual que `servidor.py`: reiniciar la página. |
+| Roles o contraseñas desde la terminal | Nada que reiniciar. Quien tenga la página abierta debe salir y volver a entrar para ver su rol nuevo. |
 
 - Los archivos de la página se leen cada vez que alguien la abre, así que siempre se ve la versión guardada.
 - `servidor.py` solo se lee al arrancar. Al reiniciarlo se pierden las sesiones y el control: todos vuelven al inicio de sesión.
@@ -143,17 +165,18 @@ Se puede quitar cada parte por separado:
 |---|---|
 | La red WiFi "Camilla" | `sudo apt purge hostapd` y `sudo rm -f /etc/hostapd/camilla.conf` |
 | El reporte de pruebas | `rm ~/reporte_red.txt` |
-| El proyecto | Borrar las carpetas `web/` y `red/`, esta guía e `INTEGRACION.md` (la contraseña del panel está dentro de `web/`) |
+| Solo los perfiles y los registros | Con la página apagada: `rm web/camilla.db` (se crea vacía al volver a encenderla; **se pierden todos los datos**) |
+| El proyecto | Borrar las carpetas `web/` y `red/`, esta guía e `INTEGRACION.md` (los perfiles y registros están dentro de `web/`) |
 
 Si quitas hostapd, `encender_red.sh` deja de funcionar; la página se puede seguir abriendo a mano con `python3 web/servidor.py`.
 
 ## Cambios en el sistema (fuera de la carpeta del proyecto)
 
-**Estado actual (29-10-2026):**
+**Estado actual (05-11-2026):**
 - **Instalado:** el paquete `hostapd`, `/etc/hostapd/camilla.conf` y `~/reporte_red.txt`. El servicio propio de `hostapd` que trae Debian está `masked`: nunca arranca solo.
 - **Nada arranca solo** al encender la Raspberry. La red y la página se encienden a mano con `encender_red.sh`.
 - **No hay** servicios de systemd del proyecto, reglas de `sudo` o polkit, ni tareas programadas (cron).
-- El panel nuevo (29-10-2026) no cambió nada del sistema: Bootstrap, fuentes y la contraseña del panel están dentro de la carpeta del proyecto, y el servidor solo usa lo que ya trae Python.
+- El panel nuevo (29-10-2026) y los perfiles con roles (05-11-2026) no cambiaron nada del sistema: Bootstrap, fuentes y la base de datos (`web/camilla.db`, SQLite que ya trae Python) están dentro de la carpeta del proyecto. No se instaló nada.
 - Para el producto terminado se hará que todo arranque solo. Cuando se haga, se anotará aquí.
 
 | Fecha | Cambio | Dónde | Estado | Cómo deshacer |
