@@ -1,0 +1,47 @@
+/* Fuentes del panel guardadas en el proyecto: la red Camilla no tiene internet
+   y Google Fonts no cargaria. Solo el juego "latin" (incluye tildes, ñ, ¿ y °).
+   Licencia: fuentes/LICENCIA.txt (SIL Open Font License 1.1) */
+
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(fuentes/barlow-condensed-500.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(fuentes/barlow-condensed-600.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(fuentes/barlow-condensed-700.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(fuentes/ibm-plex-mono-500.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(fuentes/ibm-plex-mono-600.woff2) format('woff2');
+}
+/* IBM Plex Sans es variable: un solo archivo para los pesos 400 a 700 */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url(fuentes/ibm-plex-sans.woff2) format('woff2');
+}

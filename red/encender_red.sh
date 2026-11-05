@@ -17,6 +17,8 @@ PROYECTO=$(dirname "$(dirname "$(readlink -f "$0")")")  # carpeta "Proyecto Cami
 [ -e "$CONF" ] || { echo "Primero instala la red con:  sudo ./instalar_red.sh"; exit 1; }
 # Con sudo delante la pagina correria como root: el script pide la clave solo para lo que la necesita
 [ "$(id -u)" -ne 0 ] || { echo "Correlo sin sudo:  ./encender_red.sh"; exit 1; }
+# Sin contrasena nadie puede entrar al panel (se pone con web/clave.py)
+[ -s "$PROYECTO/web/clave.json" ] || echo "Aviso: no hay contrasena para entrar a la pagina. Ponla con:  python3 web/clave.py"
 sudo -v || exit 1
 
 # WiFi al que hay que volver al terminar (p. ej. "Meso")
@@ -97,7 +99,7 @@ echo "Busca la red en el celular. Aqui veras si alguien se conecta."
 echo "Presiona ENTER para apagar la red y la pagina y volver a internet."
 echo
 
-# Monitor de eventos: conexiones, clave incorrecta, IP entregada y visitas a la pagina
+# Monitor de eventos: conexiones, clave incorrecta, IP entregada, visitas a la pagina y avisos del panel
 journalctl -f -n 0 -o cat -t hostapd -t dnsmasq-dhcp -t python3 2>/dev/null |
 while read -r linea; do
     case "$linea" in
@@ -106,6 +108,8 @@ while read -r linea; do
         *PSK-MISMATCH*)        echo "  >> Alguien intento conectarse con la CLAVE INCORRECTA" ;;
         DHCPACK*)              echo "  >> IP entregada: ${linea#* }" ;;
         *'"GET / '*)           echo "  >> Alguien abrio la pagina desde ${linea%% *}" ;;
+        *'inicio sesion'*|*'cerro sesion'*|*'control: '*|*'el control a '*|*PARO*|*'contrasena incorrecta'*)
+                               echo "  >> ${linea#*] }" ;;  # avisos del panel: quien entra, quien tiene el control, paro
     esac
 done &
 
