@@ -419,7 +419,8 @@ class Manejador(BaseHTTPRequestHandler):
         return datos if isinstance(datos, dict) else None
 
     def log_request(self, code="-", size="-"):
-        if not urlsplit(self.path).path.startswith(SILENCIO):  # la pagina consulta /api/estado cada segundo
+        # una peticion ilegible (por ejemplo HTTPS a este puerto) todavia no tiene self.path
+        if not urlsplit(getattr(self, "path", "")).path.startswith(SILENCIO):  # la pagina consulta /api/estado cada segundo
             super().log_request(code, size)
 
     def json(self, codigo, datos):
