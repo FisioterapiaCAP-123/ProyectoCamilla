@@ -10,7 +10,8 @@ export const panel = {
   bloqueo: false,
   pestana: 'control',
   modalActivo: null,
-  ultimaOrden: 0,     // la posicion que llega del servidor se ignora un momento tras mover
+  hardware: { conectado: true, secciones: ['altura', 'cabeza', 'piernas'] },   // lo actualiza el servidor
+  ultimaOrden: 0,    // la posicion que llega del servidor se ignora un momento tras mover
   paroPedidoEn: 0     // y el paro, un momento tras pulsarlo, para que no parpadee
 };
 
@@ -20,8 +21,9 @@ export const control = { titular: null, usuario: null, soyYo: false, conectado: 
 export const sesion = { usuario: null, nombre: null, rol: null, token: '' };
 
 /* Mover exige tener el control. El PARO no: ese nunca depende de esto. */
-export function puedeMover() {
-  return !panel.paro && !panel.bloqueo && control.soyYo && control.conectado;
+export function puedeMover(seccion) {
+  if (panel.paro || panel.bloqueo || !control.soyYo || !control.conectado || !panel.hardware.conectado) return false;
+  return seccion === undefined || panel.hardware.secciones.includes(seccion);
 }
 
 export function estaMoviendo(seccion) {

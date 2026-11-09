@@ -5,6 +5,12 @@ import { enviar, llamar } from './cliente.js';
 import { consultar } from './sondeo.js';
 
 let mantenerId = null;
+let ultimoNumero = Date.now();
+
+/* El servidor ignora un "mover" que llegue despues de un "detener" mas nuevo */
+function numerada(datos) {
+  return Object.assign({}, datos, { n: ++ultimoNumero });
+}
 
 /* Ordenes de control: despues se pregunta el estado ya, sin esperar al segundo */
 function enviarControl(ruta, datos) {
@@ -34,10 +40,10 @@ export const SERVIDOR = {
   mover(seccion, dir) {
     clearInterval(mantenerId);
     panel.ultimaOrden = Date.now();
-    enviar('/api/mover', { seccion, dir });
+    enviar('/api/mover', numerada({ seccion, dir }));
     mantenerId = setInterval(() => {
       panel.ultimaOrden = Date.now();
-      llamar('/api/mover', { seccion, dir }).catch(() => {});
+      llamar('/api/mover', numerada({ seccion, dir })).catch(() => {});
     }, MANTENER_MS);
   },
   // POST /api/paso {seccion, grados}       un grado exacto
@@ -49,7 +55,7 @@ export const SERVIDOR = {
   detener(seccion) {
     clearInterval(mantenerId);
     mantenerId = null;
-    enviar('/api/detener', { seccion });
+    enviar('/api/detener', numerada({ seccion }));
   },
   // POST /api/paro {activo}                no requiere tener el control ni haber entrado
   paro(activo) {

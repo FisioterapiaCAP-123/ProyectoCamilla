@@ -10,6 +10,7 @@ const el = {
   estado:       porId('estado'),
   estadoTexto:  porId('estadoTexto'),
   cintaParo:    porId('cintaParo'),
+  cintaHardware: porId('cintaHardware'),
   btnParo:      porId('btnParo'),
   txtParo:      porId('txtParo'),
   btnPlano:     porId('btnPlano'),
@@ -62,9 +63,10 @@ function pintarTopeAltura() {
 
 function pintarSeccion(seccion) {
   const suf = SUFIJO[seccion];
-  const { destino, valor } = panel;
+  const { destino, valor, hardware } = panel;
   pintarRiel(seccion);
   porId('tarjeta' + suf).classList.toggle('en-movimiento', estaMoviendo(seccion));
+  porId('sinActuador' + suf).classList.toggle('d-none', !hardware.conectado || hardware.secciones.includes(seccion));
   if (seccion === 'altura') {
     pintarTopeAltura();
     return;
@@ -79,6 +81,7 @@ function pintarEstado() {
   let texto = 'Listo';
   if (paro)                    { tono = 'alerta';     texto = 'Paro de emergencia'; }
   else if (!control.conectado) { tono = 'alerta';     texto = 'Sin conexión'; }
+  else if (!panel.hardware.conectado) { tono = 'alerta'; texto = 'Sin conexión con los motores'; }
   else if (bloqueo)            { tono = 'alerta';     texto = 'Controles bloqueados'; }
   else if (!control.soyYo)     { tono = 'listo';      texto = 'Solo lectura'; }
   else if (manual)             { tono = 'movimiento'; texto = CONFIG[manual.seccion].etiqueta + (manual.dir > 0 ? ' ↑ subiendo' : ' ↓ bajando'); }
@@ -94,13 +97,13 @@ function pintarBotones() {
     const seccion = boton.dataset.seccion;
     const dir = parseInt(boton.dataset.dir, 10);
     const c = CONFIG[seccion];
-    const enLimite = dir > 0 ? valor[seccion] >= c.max : valor[seccion] <= c.min;
-    boton.disabled = !habilitado || enLimite;
+    const enLimite = !c.sinTope && (dir > 0 ? valor[seccion] >= c.max : valor[seccion] <= c.min);
+    boton.disabled = !puedeMover(seccion) || enLimite;
     boton.classList.toggle('presionado', Boolean(manual && manual.seccion === seccion && manual.dir === dir));
   });
   SECCIONES_NUMERICAS.forEach((seccion) => {
-    porId('ir' + SUFIJO[seccion]).disabled = !habilitado;
-    porId('campo' + SUFIJO[seccion]).disabled = !habilitado;
+    porId('ir' + SUFIJO[seccion]).disabled = !puedeMover(seccion);
+    porId('campo' + SUFIJO[seccion]).disabled = !puedeMover(seccion);
   });
   el.btnPlano.disabled = !habilitado;
   /* Bloquear es una accion de quien opera; sin el control no tiene sentido.
@@ -110,6 +113,7 @@ function pintarBotones() {
   el.btnParo.classList.toggle('btn-outline-danger', paro);
   el.txtParo.textContent = paro ? 'Liberar' : 'Paro';
   el.cintaParo.classList.toggle('d-none', !paro);
+  el.cintaHardware.classList.toggle('d-none', panel.hardware.conectado);
   el.btnBloqueo.setAttribute('aria-pressed', bloqueo ? 'true' : 'false');
   el.btnBloqueo.classList.toggle('active', bloqueo);
   el.txtBloqueo.textContent = bloqueo ? 'Desbloquear' : 'Bloquear';

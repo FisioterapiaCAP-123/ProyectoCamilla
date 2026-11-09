@@ -13,6 +13,7 @@ function darPaso(seccion, dir) {
   const c = CONFIG[seccion];
   const siguiente = Math.max(c.min, Math.min(c.max, panel.valor[seccion] + dir * c.paso));
   if (siguiente === panel.valor[seccion]) {
+    if (c.sinTope) return true;   // el numero llego al limite, pero el actuador puede seguir
     marcarTope(seccion);
     return false;
   }
@@ -37,7 +38,7 @@ function marcarTope(seccion) {
 }
 
 export function iniciarManual(seccion, dir) {
-  if (!puedeMover()) return;
+  if (!puedeMover(seccion)) return;
   if (panel.manual && panel.manual.seccion === seccion && panel.manual.dir === dir) return;
   detenerTodo();
 
@@ -54,7 +55,7 @@ export function iniciarManual(seccion, dir) {
   panel.manual.esperaId = setTimeout(() => {
     if (!panel.manual) return;
     panel.manual.repeticionId = setInterval(() => {
-      if (!panel.manual || !puedeMover()) {
+      if (!panel.manual || !puedeMover(panel.manual.seccion)) {
         detenerManual();
         return;
       }

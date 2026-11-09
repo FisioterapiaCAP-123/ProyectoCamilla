@@ -36,6 +36,13 @@ export function recibir(e) {
   }
   if (vistaPanel.hidden) return;
 
+  // Si el ESP32 se desconecta, el panel lo muestra y deja de permitir el movimiento
+  if (e.hardware && JSON.stringify(e.hardware) !== JSON.stringify(panel.hardware)) {
+    panel.hardware = e.hardware;
+    registrar('← motores: ' + (e.hardware.conectado ? e.hardware.secciones.join(', ') : 'sin conexión'));
+    pintar();
+  }
+
   // El administrador puede cambiar el rol mientras la pagina esta abierta
   if (e.rol !== sesion.rol) aplicarRol(e.rol);
 

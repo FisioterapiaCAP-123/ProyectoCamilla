@@ -7,11 +7,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
 import basedatos
+import hardware
 import paginas
 
 PUERTO_WEB = 8000
 IP_RED = "10.42.0.1"  # IP de la Raspberry en su propia red WiFi "Camilla"
-SIMULACION = True  # no hay motores conectados: las ordenes se revisan y se anotan, pero no mueven nada
 TIEMPO_LIBERAR = 10  # segundos sin noticias de quien tiene el control para liberarlo (la pagina consulta cada 1 s)
 ESPERA_SOLICITUD = 35  # segundos que dura un pedido de control sin respuesta (las paginas cuentan 30)
 HOMBRE_MUERTO = 1.0  # segundos sin "mover" para parar un motor continuo (la pagina lo repite mientras se mantiene el boton)
@@ -39,7 +39,8 @@ class Camilla:
         self.respuestas = {}  # token de quien pidio el control -> {"aceptada", "usuario"}: se entrega una vez
         self.paro = False  # paro de emergencia: lo puede activar o liberar cualquiera
         self.angulos = {"cabeza": 0, "piernas": 0}  # posicion simulada mientras no haya sensores
-        self.motor = None  # motor continuo en marcha (altura): {"seccion", "dir", "visto"}
+        self.motor = None  # motor continuo en marcha: {"seccion", "dir", "visto"}
+        self.hardware = hardware.Simulador()  # al arrancar, servidor.py pone aqui el ESP32
 
     # ---------- sesiones ----------
     def entrar(self, perfil):
@@ -149,31 +150,33 @@ class Camilla:
             self.liberar(f"{usuario} lo libero")
         return True, None
 
-    # ---------- movimiento (simulado: aqui iran las ordenes a los motores) ----------
-    def puede_mover(self, usuario):
-        return usuario == self.titular and not self.paro
+    # ---------- movimiento ----------
+    def puede_mover(self, usuario, seccion):
+        return usuario == self.titular and not self.paro and self.hardware.disponible(seccion)
 
     def parar_motores(self, motivo):
         if self.motor:
             anotar(f"motor {self.motor['seccion']} parado ({motivo})")
         self.motor = None
+        self.hardware.parar()
 
     def mover(self, usuario, seccion, direccion):
         """Arranca un motor continuo. La pagina repite la orden mientras se mantiene el boton."""
-        if not self.puede_mover(usuario):
+        if not self.puede_mover(usuario, seccion):
             return False, None  # se descarta en silencio
         if not self.motor or (self.motor["seccion"], self.motor["dir"]) != (seccion, direccion):
-            anotar(f"{usuario}: {seccion} {'sube' if direccion > 0 else 'baja'}" + (" (simulado)" if SIMULACION else ""))
+            anotar(f"{usuario}: {seccion} {'sube' if direccion > 0 else 'baja'}" + (" (simulado)" if self.hardware.simulado else ""))
         self.motor = {"seccion": seccion, "dir": direccion, "visto": time.monotonic()}
+        self.hardware.mover(seccion, direccion)
         return True, None
 
     def detener(self, usuario, seccion):
-        if self.puede_mover(usuario) and self.motor and self.motor["seccion"] == seccion:
+        if usuario == self.titular and self.motor and self.motor["seccion"] == seccion:
             self.parar_motores(f"{usuario} solto el boton")
         return True, None
 
     def paso(self, usuario, seccion, grados):
-        if not self.puede_mover(usuario) or seccion not in LIMITES:
+        if not self.puede_mover(usuario, seccion) or seccion not in LIMITES:
             return False, None
         minimo, maximo = LIMITES[seccion]
         self.angulos[seccion] = max(minimo, min(maximo, self.angulos[seccion] + grados))
@@ -200,7 +203,8 @@ class Camilla:
             "rol": sesion["rol"] if sesion else None,
             "control": self.control(),
             "paro": self.paro,
-            "simulacion": SIMULACION,
+            "simulacion": self.hardware.simulado,
+            "hardware": self.hardware.estado(),
             # el pedido de control solo le llega a quien tiene el control
             "solicitud": ({"id": self.solicitud["id"], "usuario": self.solicitud["nombre"]}
                           if self.solicitud and usuario and usuario == self.titular else None),
@@ -214,6 +218,8 @@ class Camilla:
         t = time.monotonic()
         if self.motor and t - self.motor["visto"] > HOMBRE_MUERTO:
             self.parar_motores("se dejo de recibir la senal del boton")
+        if self.motor and not self.hardware.disponible(self.motor["seccion"]):
+            self.parar_motores("se perdio la conexion con el ESP32")
         if self.titular and t - self.ultimo_contacto(self.titular) > TIEMPO_LIBERAR:
             self.liberar(f"{self.titular} sin conexion")
         if self.solicitud and t - self.solicitud["creada"] > ESPERA_SOLICITUD:
@@ -241,6 +247,29 @@ def seccion_y_direccion(datos, campo):
     return seccion, valor
 
 
+def orden_vigente(sesion, datos):
+    """Las peticiones pueden llegar desordenadas: la pagina las numera y una atrasada no vale."""
+    numero = datos.get("n")
+    if not es_id(numero):
+        return True
+    if numero <= sesion.get("orden", 0):
+        return False
+    sesion["orden"] = numero
+    return True
+
+
+def accion_mover(c, d, s, t):
+    movimiento = seccion_y_direccion(d, "dir")
+    if not movimiento or not orden_vigente(s, d):
+        return False, None
+    return c.mover(s["usuario"], *movimiento)
+
+
+def accion_detener(c, d, s, t):
+    orden_vigente(s, d)  # detener nunca se descarta, pero deja atras a los "mover" atrasados
+    return c.detener(s["usuario"], d.get("seccion"))
+
+
 # Rutas POST que necesitan haber iniciado sesion: (camilla, datos, sesion, token) -> (ok, mensaje)
 ACCIONES = {
     "/api/control/tomar": lambda c, d, s, t: c.tomar(s["usuario"]),
@@ -248,9 +277,9 @@ ACCIONES = {
     "/api/control/cancelar": lambda c, d, s, t: c.cancelar(t),
     "/api/control/responder": lambda c, d, s, t: c.responder(s["usuario"], d.get("id"), d.get("aceptar") is True),
     "/api/control/liberar": lambda c, d, s, t: c.soltar(s["usuario"]),
-    "/api/mover": lambda c, d, s, t: (c.mover(s["usuario"], *m) if (m := seccion_y_direccion(d, "dir")) else (False, None)),
+    "/api/mover": accion_mover,
     "/api/paso": lambda c, d, s, t: (c.paso(s["usuario"], *m) if (m := seccion_y_direccion(d, "grados")) else (False, None)),
-    "/api/detener": lambda c, d, s, t: c.detener(s["usuario"], d.get("seccion")),
+    "/api/detener": accion_detener,
 }
 
 
@@ -441,6 +470,8 @@ if __name__ == "__main__":
     basedatos.iniciar()
     if not basedatos.hay_admin():
         print("Aviso: no hay administrador. Crea tu perfil en la pagina y luego:  python3 web/basedatos.py admin TU_USUARIO")
+    camilla.hardware = hardware.Simulador() if "--simulador" in sys.argv else hardware.Esp32Serial(anotar)
+    camilla.hardware.iniciar()
     threading.Thread(target=vigilar, daemon=True).start()
-    print(f"Pagina en http://localhost:{PUERTO_WEB}")
+    print(f"Pagina en http://localhost:{PUERTO_WEB}" + (" (simulador: no mueve motores)" if camilla.hardware.simulado else ""))
     ThreadingHTTPServer(("0.0.0.0", PUERTO_WEB), Manejador).serve_forever()
