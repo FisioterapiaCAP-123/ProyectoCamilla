@@ -4,9 +4,9 @@
    usa solo entrega sus tres funciones a iniciarSondeo().
 
    GET /api/estado responde:
-     { usuario:"antonio"|null,          null si la sesion ya no existe
-       nombre:"Antonio", rol:"admin"|"fisio",
-       control:{titular:"Ana"|null, usuario:"ana"|null},
+     { usuario:"usuario1"|null,         null si la sesion ya no existe
+       nombre:"Persona", rol:"admin"|"fisio",
+       control:{titular:"Persona"|null, usuario:"usuario1"|null},
        paro:false, simulacion:true,
        solicitud:{id, usuario}|null,    solo le llega al titular
        respuesta:{aceptada, usuario}|null,   solo al que pidio, una vez

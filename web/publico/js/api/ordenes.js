@@ -13,8 +13,8 @@ function enviarControl(ruta, datos) {
 
 export const SERVIDOR = {
   // POST /api/login   {usuario, clave}
-  //   -> {ok:true, usuario:"antonio", nombre:"Antonio", rol:"admin"|"fisio", sesion:"token",
-  //       control:{titular:"Ana"|null, usuario:"ana"|null}}
+  //   -> {ok:true, usuario:"usuario1", nombre:"Persona", rol:"admin"|"fisio", sesion:"token",
+  //       control:{titular:"Persona"|null, usuario:"usuario1"|null}}
   //   -> {ok:false, mensaje:"..."}
   login(usuario, clave) {
     return llamar('/api/login', { usuario, clave }, 8000);
