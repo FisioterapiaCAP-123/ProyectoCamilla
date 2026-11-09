@@ -1,7 +1,8 @@
 """Programa del ESP32 de la camilla (MicroPython).
 
 Se guarda en la placa como main.py con Thonny y arranca solo al recibir energia.
-Recibe las ordenes de la Raspberry por el cable USB y mueve los reles.
+Recibe las ordenes de la Raspberry por el cable USB y mueve el puente H
+(L298N o BTS7960) o, con MODULO = "reles", el modulo de 4 reles.
 
 Ordenes que recibe, una por linea, terminadas en *XX (comprobacion en hexadecimal):
     M cabeza 1     mover la seccion: 1 extiende, -1 retrae. Se debe repetir cada 200 ms
@@ -22,10 +23,16 @@ import sys
 import time
 
 import machine
-from machine import Pin
+from machine import PWM, Pin
 
 # ---------- CONFIGURACION ----------
-ACTIVO_BAJO = True          # True si el modulo de reles se activa con 0
+MODULO = "puente"           # "puente": L298N o BTS7960 | "reles": modulo de 4 reles
+PIN_EXTENDER = 25           # puente H: IN1 del L298N o RPWM del BTS7960
+PIN_RETRAER = 26            # puente H: IN2 del L298N o LPWM del BTS7960
+PIN_HABILITAR = None        # puente H: ENA o R_EN+L_EN; None si van con jumper o a 3.3 V
+VELOCIDAD = 100             # puente H: potencia en % (0 a 100)
+FRECUENCIA_PWM = 1000       # puente H: Hz
+ACTIVO_BAJO = True          # reles: True si el modulo se activa con 0
 PAUSA_CAMBIO_MS = 300       # pausa entre apagar un motor y volver a arrancarlo
 LIMITE_SIN_ORDEN_MS = 500   # sin ordenes durante este tiempo, la seccion se detiene
 WATCHDOG_MS = 2000          # si el programa se cuelga este tiempo, la placa se reinicia
@@ -63,8 +70,41 @@ class ParReles:
         poner_rele(self.a if cual == "a" else self.b, True)
 
 
+def salida_pwm(numero):
+    """Salida PWM que empieza apagada (algunas versiones arrancan el PWM a medias)."""
+    pin = Pin(numero, Pin.OUT, value=0)
+    try:
+        pwm = PWM(pin, freq=FRECUENCIA_PWM, duty_u16=0)
+    except TypeError:
+        pwm = PWM(pin, freq=FRECUENCIA_PWM)
+    pwm.duty_u16(0)
+    return pwm
+
+
+class PuenteH:
+    """Un canal de L298N o un BTS7960: "a" extiende y "b" retrae, nunca los dos a la vez."""
+
+    def __init__(self, pin_a, pin_b, pin_habilitar=None):
+        self.a = salida_pwm(pin_a)
+        self.b = salida_pwm(pin_b)
+        self.habilitar = None if pin_habilitar is None else Pin(pin_habilitar, Pin.OUT, value=0)
+
+    def detener(self):
+        self.a.duty_u16(0)
+        self.b.duty_u16(0)
+        if self.habilitar is not None:
+            self.habilitar.value(0)
+
+    def encender(self, cual):
+        self.detener()
+        if self.habilitar is not None:
+            self.habilitar.value(1)
+        potencia = max(0, min(100, VELOCIDAD)) * 65535 // 100
+        (self.a if cual == "a" else self.b).duty_u16(potencia)
+
+
 class Seccion:
-    """Actuadores que se mueven juntos, en la misma direccion."""
+    """Actuadores que se mueven juntos, en la misma direccion (pares de reles o puentes H)."""
 
     def __init__(self, pares):
         self.pares = pares
@@ -105,9 +145,15 @@ class Seccion:
 
 
 # Una entrada por seccion. Los nombres deben ser los de la pagina: altura, cabeza, piernas.
-SECCIONES = {
-    "cabeza": Seccion([ParReles(26, 27), ParReles(25, 33)]),
-}
+# Con puente H, los dos actuadores de cabeza van en paralelo en el mismo canal.
+if MODULO == "reles":
+    SECCIONES = {
+        "cabeza": Seccion([ParReles(26, 27), ParReles(25, 33)]),
+    }
+else:
+    SECCIONES = {
+        "cabeza": Seccion([PuenteH(PIN_EXTENDER, PIN_RETRAER, PIN_HABILITAR)]),
+    }
 
 
 def detener_todo():
