@@ -20,6 +20,8 @@ SECCIONES = ("altura", "cabeza", "piernas")
 BAUDIOS = 115200
 CADA_ORDEN = 0.2  # segundos entre repeticiones: el ESP32 para si pasan 0.5 s sin recibir una
 SILENCIO_MAXIMO = 1.0  # segundos sin respuesta para dar al ESP32 por desconectado
+SILENCIO_REABRIR = 3.0  # segundos sin respuesta para cerrar y reabrir el puerto: Linux puede dejarlo mudo sin dar error
+ESPERA_ARRANQUE = 6.0  # al abrir el puerto la placa se reinicia: tiempo para su primera respuesta
 ESPERA_REINTENTO = 2.0  # segundos entre intentos de abrir el puerto
 CHIPS_USB = {0x10C4, 0x1A86, 0x0403}  # conversores de las placas ESP32: CP210x, CH340 y FTDI
 
@@ -149,6 +151,7 @@ class Esp32Serial:
     def atender(self, puerto):
         recibido = b""
         proxima = 0.0
+        limite = time.monotonic() + ESPERA_ARRANQUE  # sin respuesta valida hasta aqui, se reabre el puerto
         while True:
             cambio = self.despertar.wait(0.02)
             self.despertar.clear()
@@ -165,9 +168,13 @@ class Esp32Serial:
                 if secciones is not None:
                     self.secciones = secciones
                     self.visto = time.monotonic()
+                    limite = self.visto + SILENCIO_REABRIR
                     self.avisar(f"ESP32 conectado en {puerto.port}: {', '.join(secciones)}")
             if self.visto is not None and not self.vivo():
                 self.avisar("el ESP32 dejo de responder")
+            if ahora >= limite:
+                raise OSError("dejo de responder" if self.visto is not None
+                              else "no respondio al abrir el puerto (revisa que tenga cargado esp32/main.py)")
 
     def trabajar(self):
         while True:
