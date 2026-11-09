@@ -3,7 +3,7 @@
 **Última actualización:** 08-11-2026  
 **Guía general:** [GUIA.md](GUIA.md)
 
-Este documento describe cómo se comunican el panel web (`web/index.html`), el servidor (`web/servidor.py`) y la base de datos (`web/basedatos.py`), tal como están implementados. Es la referencia para modificar cualquiera de esas partes.
+Este documento describe cómo se comunican el panel web (`web/plantillas/` y `web/publico/`), el servidor (`web/servidor.py`) y la base de datos (`web/basedatos.py`), tal como están implementados. Es la referencia para modificar cualquiera de esas partes.
 
 ## Contenido
 
@@ -22,7 +22,7 @@ Este documento describe cómo se comunican el panel web (`web/index.html`), el s
 ## 1. Modelo de comunicación
 
 ```text
-Panel (index.html)                            Servidor (servidor.py)
+Panel (publico/js/)                           Servidor (servidor.py)
 
 SERVIDOR.*, ADMIN.*  ---- POST /api/... ---->  do_POST --> Camilla, administrar()
 consultar() cada 1 s ---- GET /api/estado -->  do_GET  --> Camilla.estado()
@@ -62,7 +62,7 @@ recibir()            <--- JSON --------------
 
 | Acceso | Rutas |
 |---|---|
-| Sin sesión | `GET /`, `GET /vendor/*`, `GET /api/estado`, `POST /api/login`, `POST /api/registro`, `POST /api/paro` |
+| Sin sesión | `GET /`, `GET /css/*`, `GET /js/*`, `GET /vendor/*`, `GET /api/estado`, `POST /api/login`, `POST /api/registro`, `POST /api/paro` |
 | Con sesión | `POST /api/logout`, `POST /api/control/*`, `POST /api/mover`, `POST /api/detener`, `POST /api/paso` |
 | Administrador | `POST /api/pacientes/*`, `POST /api/usuarios/*` |
 
@@ -70,7 +70,10 @@ recibir()            <--- JSON --------------
 
 ### 3.1 Archivos estáticos
 
-`GET /` entrega `index.html`. `GET /vendor/...` entrega Bootstrap y las fuentes. Solo se sirven los archivos de la tabla `ARCHIVOS`; se leen del disco en cada petición, y la lista de fuentes se arma al arrancar el servidor.
+Las atiende `web/paginas.py`, que lee del disco en cada petición.
+
+- `GET /` entrega `plantillas/index.html` con sus parciales ya insertados. El navegador recibe un solo documento HTML.
+- Cualquier otra ruta se busca dentro de `web/publico/`. Solo se entregan archivos `.css`, `.js` y `.woff2`; lo demás responde 404. Una ruta que intente salir de esa carpeta también responde 404, de modo que `camilla.db`, el código Python y las plantillas no son accesibles.
 
 ### 3.2 Portal cautivo
 
@@ -269,7 +272,7 @@ Ana (pide)                       Servidor                     Antonio (titular)
 | En pantalla | Origen | Alcance |
 |---|---|---|
 | Ángulo de cabeza y de piernas | `telemetria`, que sale de `Camilla.angulos` (valores simulados) | Compartido por todas las pantallas |
-| Barra y dibujo de la altura | Variable local `valor.altura` de la página | Solo esa página. Parte de 50 al cargar y no se envía al servidor. |
+| Barra y dibujo de la altura | Variable local `panel.valor.altura` de la página | Solo esa página. Parte de 50 al cargar y no se envía al servidor. |
 | "En el tope superior" y "En el tope inferior" | Límites 100 y 0 de la estimación local | Solo esa página |
 
 - `/api/estado` no incluye altura ni finales de carrera. La función `window.camilla.topeAltura()` existe en la página, pero ningún dato del servidor la invoca.
@@ -303,10 +306,10 @@ Ana (pide)                       Servidor                     Antonio (titular)
 | `CLAVE_MINIMA` | `6` | Largo mínimo de la contraseña |
 | `EDAD_MAXIMA` | `120` | Edad máxima de un paciente |
 
-**Página (`web/index.html`)**
+**Página (`web/publico/js/config.js`)**
 
 ```js
-var CONFIG = {
+export const CONFIG = {
   altura:  { min: 0, max: 100, ref: 0, paso: 2, numerica: false, continua: true,
              etiqueta: 'Altura' },
   cabeza:  { min: -30, max: 70, ref: 0, paso: 1, numerica: true, unidad: '°',
@@ -383,7 +386,7 @@ CREATE TABLE IF NOT EXISTS pacientes (
 
 ### Validación
 
-Las reglas de perfiles están en `web/basedatos.py` y repetidas en `web/index.html`. El servidor siempre las aplica.
+Las reglas de perfiles están en `web/basedatos.py` y repetidas en `web/publico/js/ui/formularios.js` y `web/publico/js/vistas/acceso.js`. El servidor siempre las aplica.
 
 | Campo | Regla | Patrón o límite |
 |---|---|---|
@@ -404,7 +407,135 @@ Las reglas de perfiles están en `web/basedatos.py` y repetidas en `web/index.ht
 
 ## 10. Estructura del panel web
 
-`web/index.html` contiene todo el panel: marcado, estilos y un único script.
+### 10.1 Organización
+
+El panel es una sola página, organizada en tres partes sin paso de compilación. La Raspberry solo necesita Python; el navegador carga los módulos JavaScript directamente.
+
+| Carpeta | Contenido |
+|---|---|
+| `web/plantillas/` | HTML en parciales. `index.html` es el esqueleto. Cada `<!-- incluir: ruta -->` se reemplaza por ese archivo, con la ruta relativa a `plantillas/`. |
+| `web/publico/css/` | Estilos propios. Se cargan después de Bootstrap, en el orden de `index.html`. |
+| `web/publico/js/` | Módulos JavaScript. `main.js` es el punto de entrada. |
+
+Las dependencias entre módulos no forman ciclos. Cada módulo con eventos expone una función `iniciar...` y `main.js` las llama en orden. Los datos de entrada llegan únicamente por `api/sondeo.js`, que recibe sus funciones de `main.js`.
+
+Los atributos `id` del HTML enlazan las plantillas con JavaScript. Al renombrar o quitar uno hay que actualizar el módulo que lo usa; si falta, el panel falla con un error de JavaScript.
+
+### 10.2 Servidor y red
+
+| Archivo | Qué es y para qué sirve | Qué se modifica aquí |
+|---|---|---|
+| `web/servidor.py` | Servidor HTTP. Atiende la API, guarda el estado compartido en la clase `Camilla`, aplica las reglas del control y ejecuta la vigilancia periódica. | Constantes del inicio (`PUERTO_WEB`, `IP_RED`, `TIEMPO_LIBERAR`, `ESPERA_SOLICITUD`, `HOMBRE_MUERTO`, `SESION_HORAS`, `LIMITES`). Reglas del control y órdenes a los motores en `Camilla`. Rutas en `ACCIONES`, `administrar` y `do_POST`. `encender_red.sh` lee las frases de `anotar()`: al cambiarlas hay que ajustar su monitor. |
+| `web/paginas.py` | Compone el HTML desde `plantillas/` y entrega los archivos de `publico/`. | Tipos de archivo que se entregan (`TIPOS`) y la forma de resolver los `incluir` (`INCLUIR`, `componer`). |
+| `web/basedatos.py` | Acceso a SQLite: perfiles, contraseñas, pacientes y comandos de terminal. | Tablas (`TABLAS`), roles (`ROLES`), reglas de perfiles (`revisar_clave`, `crear_usuario`) y de pacientes (`guardar_paciente`), `CLAVE_MINIMA`, `EDAD_MAXIMA`, `VUELTAS` y los comandos de terminal. |
+| `web/camilla.db` | Base de datos SQLite. La crea `basedatos.py` y no se sube a git. | No se edita a mano. Se administra desde el panel o con `web/basedatos.py`. |
+| `red/instalar_red.sh` | Instala `hostapd` y crea la configuración de la red WiFi. Se ejecuta una vez. | Nombre y parámetros de la red: `ssid`, `country_code`, `hw_mode`, `channel`. |
+| `red/encender_red.sh` | Enciende y apaga la red y la página, y muestra los eventos en vivo. | Dirección IP y rango de DHCP (`--dhcp-range`), redirección de puertos y mensajes del monitor (bloque `case`). |
+
+### 10.3 Plantillas HTML
+
+Las rutas son relativas a `web/plantillas/`.
+
+| Archivo | Qué es y para qué sirve | Qué se modifica aquí |
+|---|---|---|
+| `index.html` | Esqueleto de la página: cabecera, carga de estilos y scripts, e inclusión de las partes principales. | Título, hojas de estilo y su orden, inclusión de modales y zona de toasts (`zonaToasts`). |
+| `login.html` | Vista `vistaLogin`: inicio de sesión (`formLogin`) y creación de perfil (`formRegistro`). | Campos, rótulos y textos de ayuda de la pantalla de acceso. |
+| `paro-flotante.html` | Botón de paro visible en el acceso, sobre los modales y en las pestañas de administración. | Contenido e icono de ese botón. |
+| `panel/panel.html` | Vista `vistaPanel`: reúne encabezado, barra de pestañas y contenido de cada pestaña. | Bloques que forman el panel e inclusión de pestañas. |
+| `panel/encabezado.html` | Título, perfil de la persona y botones Bloquear y Salir. | Nombre del equipo, datos del perfil y botones del encabezado. |
+| `panel/pestanas.html` | Barra de pestañas del administrador. | Botones de pestaña (`data-pestana`), textos e iconos. |
+| `panel/registros.html` | Pestaña Registros: formulario y tabla de pacientes. | Campos del formulario, columnas y buscador. |
+| `panel/usuarios.html` | Pestaña Usuarios: tabla de perfiles. | Columnas y texto de ayuda. |
+| `panel/control/control.html` | Pestaña Control: acomoda sus bloques. | Orden y columnas de los bloques de control. |
+| `panel/control/barra-control.html` | Barra que muestra quién tiene el control. | Estructura de la barra. Los textos y botones cambian en `ui/pintado.js`. |
+| `panel/control/cinta-paro.html` | Aviso de paro de emergencia activo. | Texto e icono del aviso. |
+| `panel/control/diagrama.html` | Dibujo SVG de la camilla y su leyenda. | Formas del dibujo y leyenda. Las coordenadas deben coincidir con `ui/dibujo.js`. |
+| `panel/control/altura.html` | Tarjeta de altura: botones Subir y Bajar, y riel. | Textos y botones. Cada botón indica `data-seccion` y `data-dir`. |
+| `panel/control/cabeza.html` | Tarjeta de cabeza: lectura, riel, botones y campo "Ir a". | Textos, botones y campo de esa sección. |
+| `panel/control/piernas.html` | Tarjeta de piernas: lectura, riel, botones y campo "Ir a". | Textos, botones y campo de esa sección. |
+| `panel/control/barra-seguridad.html` | Barra inferior: luz de estado, Plano 0° y Paro. | Botones y distribución de la barra. |
+| `panel/control/registro-comandos.html` | Desplegable "Registro de comandos (desarrollo)". | Título y presentación del desplegable. |
+| `modales/tomar.html` | `modalTomar`: ofrece tomar el control. | Título, texto y botones de ese aviso. |
+| `modales/solicitar.html` | `modalSolicitar`: ofrece pedir el control. | Título, texto y botones de ese aviso. |
+| `modales/esperando.html` | `modalEsperando`: espera la respuesta del titular. | Título, texto y barra de cuenta regresiva. |
+| `modales/entrante.html` | `modalEntrante`: el titular decide un pedido. | Título, texto, botones y barra de cuenta regresiva. |
+| `modales/sin-conexion.html` | `modalSinConexion`: se perdió la conexión. | Título, texto y botón Reintentar. |
+| `modales/confirmar.html` | `modalConfirmar`: confirmación genérica. | Estructura. Cada texto lo define quien llama a `confirmar`. |
+| `modales/clave.html` | `modalClave`: contraseña nueva para otro perfil. | Campo y textos del formulario. |
+
+### 10.4 Hojas de estilo
+
+Las rutas son relativas a `web/publico/css/`.
+
+| Archivo | Qué es y para qué sirve | Qué se modifica aquí |
+|---|---|---|
+| `tokens.css` | Paleta del proyecto y variables de Bootstrap. | Colores de cada sección (`--cabeza`, `--piernas`, `--altura`), colores generales, fuentes y contraste. |
+| `base.css` | Estructura general de la página y piezas compartidas. | Márgenes y ancho máximo, tipografía (`.tipo-titulo`, `.tipo-dato`), rótulos de campo, marcos de icono y reducción de movimiento. |
+| `botones.css` | Apariencia de los botones propios. | Botones de movimiento (`.btn-mover`), "Ir" (`.btn-ir`), botones grandes (`.btn-accion` y variantes), de formulario (`.btn-formulario`) y de barra (`.btn-barra`). |
+| `secciones.css` | Tarjetas de altura, cabeza y piernas. | Color de acento por sección, número grande (`.cifra`), campo de ángulo y riel de recorrido (`.riel-*`). |
+| `camilla.css` | Apariencia del dibujo SVG. | Colores, trazos, animaciones del dibujo y leyenda (`.punto`). |
+| `panel.css` | Partes fijas del panel. | Encabezado, barra de control (`.control-barra`), luz de estado (`.estado`), barra inferior, paro flotante y registro de comandos. |
+| `modales.css` | Modales y avisos. | Franja superior (`.modal-tope`, `.tope-*`), tonos de icono, cuenta regresiva y colores de los toasts (`.aviso-*`). |
+| `login.css` | Pantalla de acceso. | Tamaño y posición de la caja y sus títulos. |
+| `admin.css` | Pestañas y tablas del administrador. | Pestañas (`.pestanas`), tablas (`.tabla-admin`), buscador y tarjeta de paciente. |
+
+### 10.5 Módulos JavaScript
+
+Las rutas son relativas a `web/publico/js/`.
+
+| Archivo | Qué es y para qué sirve | Qué se modifica aquí |
+|---|---|---|
+| `main.js` | Punto de entrada: conecta los módulos y arranca el panel. | Orden de arranque y llamadas `iniciar...` de módulos nuevos. |
+| `config.js` | Parámetros del panel. | `CONFIG` (recorridos y pasos), `RITMO`, `SECCIONES`, `SUFIJO`, `ROLES` y tiempos de consulta y espera. |
+| `estado.js` | Estado compartido: `panel`, `control`, `sesion`. | Datos nuevos compartidos entre módulos y la regla `puedeMover`. |
+| `utilidades.js` | Funciones generales: `porId`, `signo`, `conSigno`, `esc`, `sinTildes`. | Funciones que no dependen de ninguna parte del panel. |
+| `recepcion.js` | Aplica lo que informa el servidor: `recibir`, `reconectado`, `caidaDeConexion`. | Qué hace el panel con cada campo de `/api/estado` y con la pérdida de conexión. `ECO_MS`. |
+| `api/cliente.js` | Peticiones HTTP y token de sesión: `pedir`, `llamar`, `enviar`, `guardarToken`. | Cabeceras, plazo por defecto y almacenamiento del token. |
+| `api/sondeo.js` | Consulta periódica de `/api/estado`: `consultar`, `iniciarSondeo`. | Forma de obtener el estado y su plazo (`PLAZO_MS`). |
+| `api/ordenes.js` | Objeto `SERVIDOR`: órdenes de sesión, movimiento, paro y control. | Rutas y datos de esas órdenes, y órdenes nuevas. |
+| `api/admin.js` | Objeto `ADMIN`: pedidos de pacientes y perfiles. | Rutas y datos de administración. |
+| `camilla/movimiento.js` | Lógica del movimiento y del paro: `iniciarManual`, `detenerManual`, `irA`, `activarParo`, `liberarParo`, `alternarParo`. | Cómo avanza cada paso, la repetición al mantener, "Ir a", el paro y `DURACION_TOPE_MS`. |
+| `camilla/mandos.js` | Conecta los controles con el movimiento. | Eventos de los botones, teclas (`TECLAS_PULSAR`, Esc), campo "Ir a" y botones Plano, Paro y Bloquear. |
+| `camilla/telemetria.js` | Lecturas de la camilla y objeto público `window.camilla`. | Cómo se aplican las lecturas (`aplicarAngulos`) y los miembros de `window.camilla`. |
+| `ui/pintado.js` | Lleva el estado a la pantalla: `pintar`. | Rieles, textos de estado, botones habilitados, barra de control (`datosBarraControl`), paro flotante y anuncio de voz. |
+| `ui/dibujo.js` | Anima el dibujo de la camilla. | Geometría (`PIVOTE`, `R_ARCO`, `AMPLITUD_PX`, `SUPERFICIE_Y`, `PISTON_BASE`) y su animación. |
+| `ui/modales.js` | Gestión de modales: `abrirModal`, `cerrarModal`, `confirmar`, `iniciarCuenta`. | Comportamiento común de los modales, cuenta regresiva y confirmación. |
+| `ui/avisos.js` | Toasts (`mostrarAviso`) y revisión de respuestas (`revisar`). | Duración (`DURACION_MS`), tipos de aviso y mensaje de error de conexión. |
+| `ui/formularios.js` | Reglas y ayudas de los formularios: `revisarClave`, `marcarCampo`, `ocupado`. | Reglas de caracteres y contraseña, y sus mensajes. Deben coincidir con `web/basedatos.py`. |
+| `ui/registro.js` | Registro de comandos: `registrar`, `iniciarDiagnostico`. | Cantidad de líneas (`MAXIMO_LINEAS`, `LINEAS_VISIBLES`) y captura de errores. |
+| `vistas/acceso.js` | Formularios de inicio de sesión y creación de perfil. | Validación y mensajes de esos formularios, y `PAUSA_BIENVENIDA_MS`. |
+| `vistas/sesion.js` | Entrada y salida del panel: `entrarAlPanel`, `sesionTerminada`. | Qué ocurre al entrar o salir, incluida la toma automática del control. |
+| `vistas/cesion.js` | Titular del control y pedidos: `aplicarControl`, `pedirControl`, `atenderSolicitud`, `resolverSolicitud`. | Flujo y avisos al tomar, pedir, ceder o liberar el control. |
+| `vistas/pestanas.js` | Pestañas del panel y permisos por rol: `aplicarRol`. | Lista `PESTANAS`, qué se carga al abrir cada una y qué ve cada rol. |
+| `vistas/pacientes.js` | Pestaña Registros. | Filas de la tabla (`filaPaciente`), búsqueda, validación, guardado y borrado. |
+| `vistas/usuarios.js` | Pestaña Usuarios. | Filas de la tabla (`filaUsuario`), opciones del menú (`menuAcciones`, `ACCIONES`) y sus confirmaciones. |
+
+### 10.6 Bootstrap y fuentes
+
+Las rutas son relativas a `web/publico/vendor/`. Son archivos de terceros: no se editan, solo se reemplazan por otra versión completa. Los ajustes visuales van en `web/publico/css/`.
+
+| Archivo | Qué es y para qué sirve | Qué se modifica aquí |
+|---|---|---|
+| `bootstrap.min.css` | Estilos de Bootstrap 5.3.3. | Se reemplaza al actualizar Bootstrap. |
+| `bootstrap.bundle.min.js` | JavaScript de Bootstrap 5.3.3: modales, toasts y menús. | Se reemplaza al actualizar Bootstrap, junto con el CSS. |
+| `fuentes.css` | Declara las fuentes guardadas en `fuentes/`. | Fuentes y pesos disponibles. |
+| `fuentes/*.woff2` | Barlow Condensed, IBM Plex Mono e IBM Plex Sans. | Se agregan o reemplazan archivos de fuente. |
+| `fuentes/LICENCIA.txt` | Licencia de las fuentes. No se entrega por HTTP. | Se actualiza si cambian las fuentes. |
+
+### 10.7 Cambios que abarcan varios archivos
+
+| Cambio | Archivos |
+|---|---|
+| Límite de ángulo | `LIMITES` en `web/servidor.py` y `CONFIG` en `publico/js/config.js` |
+| Puerto o dirección IP | `PUERTO_WEB` e `IP_RED` en `web/servidor.py`, y `red/encender_red.sh` |
+| Reglas de perfiles | `web/basedatos.py`, `ui/formularios.js` y `vistas/acceso.js` |
+| Campo nuevo de paciente | `TABLAS` y `guardar_paciente` en `web/basedatos.py`, `panel/registros.html` y `vistas/pacientes.js`. Una base ya creada no recibe la columna nueva. |
+| Hoja de estilo nueva | El archivo en `publico/css/` y su `<link>` en `plantillas/index.html` |
+| Módulo JavaScript nuevo | El archivo en `publico/js/`, su `import` en el módulo que lo usa y, si tiene eventos, su `iniciar...` en `main.js` |
+| Modal nuevo | Su archivo en `plantillas/modales/`, su `incluir` en `plantillas/index.html` y la llamada a `abrirModal` en el módulo que lo abre. `ui/modales.js` lo registra solo. |
+| Pestaña nueva | Su parcial en `plantillas/panel/`, su `incluir` en `panel/panel.html`, su botón en `panel/pestanas.html`, su entrada en `PESTANAS` de `vistas/pestanas.js`, y su módulo en `vistas/` con su `iniciar...` en `main.js` |
+
+### 10.8 Vistas, modales y API pública
 
 **Vistas**
 
@@ -413,7 +544,7 @@ Las reglas de perfiles están en `web/basedatos.py` y repetidas en `web/index.ht
 | `vistaLogin` | Inicio de sesión y creación de perfil |
 | `vistaPanel` | Panel, con las pestañas `pestanaControl`, `pestanaRegistros` y `pestanaUsuarios`. Las dos últimas y la barra de pestañas solo aparecen con rol `admin`. |
 
-**Avisos modales.** Usan el componente de Bootstrap con fondo estático y sin cierre por tecla Esc.
+**Avisos modales.** Usan el componente de Bootstrap con fondo estático y sin cierre por tecla Esc. Cada uno está en su archivo de `web/plantillas/modales/`, y `ui/modales.js` registra todo elemento `.modal` de la página.
 
 | Identificador | Cuándo aparece |
 |---|---|
@@ -424,22 +555,6 @@ Las reglas de perfiles están en `web/basedatos.py` y repetidas en `web/index.ht
 | `modalSinConexion` | La conexión con el servidor se perdió |
 | `modalConfirmar` | Confirmación de acciones de administración |
 | `modalClave` | Contraseña nueva para otro perfil |
-
-**Secciones del script**
-
-| Sección | Contenido |
-|---|---|
-| 1. Configuración | `CONFIG`, `RITMO` |
-| 2. Puente con el hardware | `cmdMover`, `cmdPaso`, `cmdDetener`, `cmdParo` |
-| 3. Estado | `valor`, `manual`, `destino`, `paro`, `bloqueo`, `control`, `sesion` |
-| 4. Movimiento | `darPaso`, `iniciarManual`, `detenerManual`, `irA`, `activarParo`, `liberarParo` |
-| 5. Pintado | `pintar` y sus funciones auxiliares |
-| 6. Eventos de los botones | `conectarBoton` y el campo "Ir a" |
-| 7. Telemetría | Objeto público `window.camilla` |
-| 8. Conexión con el servidor | `SERVIDOR` (salida), `recibir` y `consultar` (entrada), `caidaDeConexion` |
-| 8b. Modales, avisos y barra de control | `abrirModal`, `mostrarAviso`, `aplicarControl` |
-| 8c. Inicio de sesión, perfil y sesión | `entrarAlPanel`, `salirDelPanel`. Le siguen, sin numerar, la barra inferior, las pestañas y la administración (`ADMIN`). |
-| 9. Arranque | Estado inicial y consulta periódica |
 
 **Objeto `window.camilla`**
 

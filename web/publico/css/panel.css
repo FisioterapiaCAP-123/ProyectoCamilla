@@ -1,0 +1,66 @@
+/* Encabezado, barra de control, barra de seguridad y paro */
+
+/* --- Encabezado --- */
+.titulo-panel{font-size:1.7rem}
+.subtitulo-panel{font-size:.8rem;letter-spacing:.09em}
+.perfil-chip{min-height:40px;max-width:100%}
+.perfil-nombre{max-width:170px}
+.perfil-rol{font-size:.68rem;letter-spacing:.08em}
+/* En celulares angostos Bloquear y Salir quedan solo con icono (el texto se sigue leyendo en voz) */
+@media (max-width:420px){
+  .texto-boton{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+}
+
+/* --- Barra de quien tiene el control --- */
+.control-barra{border-width:2px!important}
+.control-barra[data-estado="mio"]          { border-color:var(--bs-success)!important; background:#f1f9f4!important }
+.control-barra[data-estado="ajeno"]        { border-color:var(--piernas)!important;    background:var(--piernas-suave)!important }
+.control-barra[data-estado="libre"]        { border-color:var(--altura)!important;     background:var(--altura-suave)!important }
+.control-barra[data-estado="sin-conexion"] { border-color:var(--bs-danger)!important;  background:#fbe4e4!important }
+.control-identidad{min-width:200px}
+.control-rotulo{font-size:.74rem;letter-spacing:.09em}
+.control-nombre{font-size:1.35rem;font-weight:600}
+.control-inicial{
+  width:44px;height:44px;flex:none;border-radius:50%;
+  display:grid;place-items:center;color:#fff;
+  font-family:var(--titulo);font-size:1.4rem;font-weight:700;
+  background:#3b4857;
+}
+.control-barra[data-estado="mio"] .control-inicial          { background:var(--bs-success) }
+.control-barra[data-estado="ajeno"] .control-inicial        { background:var(--piernas-txt) }
+.control-barra[data-estado="libre"] .control-inicial        { background:var(--altura-txt) }
+.control-barra[data-estado="sin-conexion"] .control-inicial { background:#9e1c1c }
+.perfil-inicial{width:32px;height:32px;font-size:1.05rem}
+
+.cinta-paro-texto{font-size:1.25rem}
+
+/* --- Luz de estado de la barra inferior --- */
+.estado{min-width:230px}
+.estado-texto{font-size:.88rem}
+.estado-luz{width:13px;height:13px;border-radius:50%;flex:none;background:#56657a}
+.estado[data-tono="listo"]      .estado-luz{background:var(--bs-success)}
+.estado[data-tono="movimiento"] .estado-luz{background:var(--altura);animation:parpadeo .7s steps(1) infinite}
+.estado[data-tono="alerta"]     .estado-luz{background:var(--bs-danger);animation:parpadeo .5s steps(1) infinite}
+.estado[data-tono="alerta"]{background:#fbe4e4!important;border-color:var(--bs-danger)!important}
+@keyframes parpadeo{50%{opacity:.15}}
+
+/* Barra inferior pegada al borde, respetando el area segura */
+.barra-seguridad{
+  position:sticky;bottom:0;z-index:3;
+  padding-block:.7rem;
+  padding-bottom:calc(.7rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* El paro queda sobre el backdrop de Bootstrap (1050) y bajo los toasts */
+.paro-flotante{
+  position:fixed;z-index:1080;
+  right:max(14px, env(safe-area-inset-right, 0px));
+  bottom:calc(14px + env(safe-area-inset-bottom, 0px));
+  min-height:62px;
+  font-size:1.35rem;letter-spacing:.08em;border-width:2px;
+  box-shadow:0 12px 32px -10px rgba(158,28,28,.85);
+}
+
+/* --- Registro de comandos --- */
+.resumen-registro{letter-spacing:.05em;cursor:pointer}
+.log-salida{max-height:180px;overflow:auto;font-size:.8rem;line-height:1.7}

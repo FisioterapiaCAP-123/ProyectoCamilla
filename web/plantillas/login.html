@@ -1,0 +1,101 @@
+<div class="envoltorio vista" id="vistaLogin">
+  <div class="d-flex flex-column align-items-center justify-content-center login-marco">
+    <div class="card border shadow-sm rounded-4 login-caja">
+      <div class="card-body p-4">
+
+        <div class="text-center mb-4">
+          <span class="d-inline-grid border rounded-3 bg-body mb-2 icono-marco" aria-hidden="true">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M3 14h18"/><path d="M3 14 8 8"/><path d="M21 14l-5-4"/><path d="M6 14v5"/><path d="M18 14v5"/>
+            </svg>
+          </span>
+          <h1 class="tipo-titulo fw-bold mb-1 titulo-login">Control camilla</h1>
+          <p class="text-uppercase fw-semibold small mb-0 subtitulo-login text-body-secondary" id="loginSubtitulo">
+            Acceso al panel de operación
+          </p>
+        </div>
+
+        <div class="alert d-flex align-items-start gap-2 d-none" id="loginAlerta" role="alert"></div>
+
+        <!-- Entrar con el perfil de cada uno -->
+        <form id="formLogin" novalidate>
+          <div class="mb-3">
+            <label for="loginUsuario" class="form-label tipo-titulo text-uppercase fw-semibold rotulo-campo">Usuario</label>
+            <input type="text" class="form-control form-control-lg" id="loginUsuario" name="usuario" maxlength="20"
+                   autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="" required>
+            <div class="invalid-feedback" id="loginUsuarioAviso">Escribe tu usuario.</div>
+          </div>
+
+          <div class="mb-4">
+            <label for="loginClave" class="form-label tipo-titulo text-uppercase fw-semibold rotulo-campo">Contrase&ntilde;a</label>
+            <div class="input-group input-group-lg has-validation">
+              <input type="password" class="form-control" id="loginClave" name="clave"
+                     autocomplete="current-password" required>
+              <button class="btn btn-outline-secondary" type="button" id="verClave"
+                      aria-pressed="false" aria-label="Mostrar la contraseña">
+                <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>
+                </svg>
+              </button>
+              <div class="invalid-feedback" id="loginClaveAviso">Escribe tu contraseña.</div>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-lg w-100 tipo-titulo text-uppercase fw-semibold btn-accion btn-entrar"
+                  id="btnIngresar">
+            Ingresar
+          </button>
+          <p class="text-center mt-4 mb-0">
+            ¿No tienes perfil?
+            <button type="button" class="btn btn-link p-0 align-baseline fw-semibold" id="irRegistro">Crear perfil</button>
+          </p>
+        </form>
+
+        <!-- Perfil nuevo: cualquiera lo crea y entra como fisioterapeuta -->
+        <form id="formRegistro" novalidate hidden>
+          <div class="mb-3">
+            <label for="regNombre" class="form-label tipo-titulo text-uppercase fw-semibold rotulo-campo">Nombre</label>
+            <input type="text" class="form-control form-control-lg" id="regNombre" maxlength="40"
+                   autocomplete="name" autocapitalize="words" placeholder="Tu nombre" required>
+            <div class="form-text">Así te verán los demás en el panel. Mínimo 2 letras, sin números, tildes, símbolos ni espacios.</div>
+            <div class="invalid-feedback" id="regNombreAviso">Escribe tu nombre.</div>
+          </div>
+
+          <div class="mb-3">
+            <label for="regUsuario" class="form-label tipo-titulo text-uppercase fw-semibold rotulo-campo">Usuario</label>
+            <input type="text" class="form-control form-control-lg" id="regUsuario" maxlength="20"
+                   autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Usuario" required>
+            <div class="form-text">Con él entras. De 3 a 20 caracteres: solo letras y números, sin tildes, símbolos ni espacios.</div>
+            <div class="invalid-feedback" id="regUsuarioAviso"></div>
+          </div>
+
+          <div class="mb-3">
+            <label for="regClave" class="form-label tipo-titulo text-uppercase fw-semibold rotulo-campo">Contrase&ntilde;a</label>
+            <input type="password" class="form-control form-control-lg" id="regClave" autocomplete="new-password" required>
+            <div class="form-text">Mínimo 6 caracteres: solo letras y números, sin tildes, símbolos ni espacios.</div>
+            <div class="invalid-feedback" id="regClaveAviso"></div>
+          </div>
+
+          <div class="mb-4">
+            <label for="regClave2" class="form-label tipo-titulo text-uppercase fw-semibold rotulo-campo">Repite la contrase&ntilde;a</label>
+            <input type="password" class="form-control form-control-lg" id="regClave2" autocomplete="new-password" required>
+            <div class="invalid-feedback">Las contraseñas no coinciden.</div>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-lg w-100 tipo-titulo text-uppercase fw-semibold btn-accion btn-entrar"
+                  id="btnRegistrar">
+            Crear perfil
+          </button>
+          <p class="small text-center mt-3 mb-0 text-body-secondary">
+            Entras como fisioterapeuta. El administrador puede cambiar tu rol.
+          </p>
+          <p class="text-center mt-3 mb-0">
+            ¿Ya tienes perfil?
+            <button type="button" class="btn btn-link p-0 align-baseline fw-semibold" id="irLogin">Ingresar</button>
+          </p>
+        </form>
+
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,23 @@
+<!-- 3 · Esperando respuesta -->
+<div class="modal fade" id="modalEsperando" tabindex="-1" aria-labelledby="tEsperando" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4 modal-tope tope-neutro">
+      <div class="modal-body p-4 d-flex flex-column gap-3">
+        <span class="d-grid rounded-3 bg-body-tertiary icono-marco text-body-secondary" aria-hidden="true">
+          <span class="spinner-border spinner-modal" role="status"></span>
+        </span>
+        <h2 class="tipo-titulo mb-0 titulo-modal" id="tEsperando">
+          Esperando a <span id="esperandoNombre">Antonio</span>
+        </h2>
+        <p class="mb-0 text-body-secondary">Ya le llegó tu solicitud. En cuanto responda lo verás aquí.</p>
+        <div class="d-flex align-items-center gap-2">
+          <span class="tipo-dato fw-semibold flex-shrink-0 cuenta-segundos text-body-secondary" id="esperandoSegundos">30 s</span>
+          <div class="progress flex-grow-1 cuenta-progreso" role="progressbar" aria-label="Tiempo restante">
+            <div class="progress-bar bg-secondary cuenta-barra" id="esperandoBarra"></div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-outline-secondary btn-lg w-100 tipo-titulo text-uppercase fw-semibold btn-accion btn-accion-sec" id="btnCancelarSolicitud">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>

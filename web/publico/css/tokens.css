@@ -1,0 +1,35 @@
+/* Tokens de color y de fuente, inyectados en las variables de Bootstrap. */
+:root{
+  color-scheme: only light;   /* "only": el celular tampoco puede oscurecerla por su cuenta */
+
+  /* --- Paleta --- */
+  --cabeza:#0e8c88;   --cabeza-txt:#07605d;   --cabeza-suave:#ddf1f0;
+  --piernas:#c26a09;  --piernas-txt:#8a4a04;  --piernas-suave:#fbecd8;
+  --altura:#3563a8;   --altura-txt:#1f4480;   --altura-suave:#e3ecf9;
+  --tapiz:#aebbc9;    --tapiz-borde:#7f8fa1;
+  --estructura:#8d9cae;
+  --piso:#c6d0db;
+
+  /* --- Fuentes: variables propias de Bootstrap --- */
+  --bs-body-font-family:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --bs-font-monospace:"IBM Plex Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+  --bs-body-font-size:1rem;
+  --titulo:"Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+
+  /* --- Contraste: subimos los grises de Bootstrap para que pasen AA --- */
+  --bs-body-color:#0f1822;
+  --bs-body-bg:#eef2f7;
+  --bs-secondary-color:#3b4857;
+  --bs-tertiary-bg:#f4f7fb;
+  --bs-border-color:#a7b5c5;
+  --bs-emphasis-color:#0f1822;
+
+  /* --- Acentos de Bootstrap alineados a la paleta --- */
+  --bs-primary:#1f4480;
+  --bs-primary-rgb:31,68,128;
+  --bs-danger:#c62828;
+  --bs-danger-rgb:198,40,40;
+  --bs-success:#1f7a45;
+  --bs-success-rgb:31,122,69;
+  --bs-link-color:#1f4480;
+}

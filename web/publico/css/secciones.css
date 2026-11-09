@@ -1,0 +1,34 @@
+/* Tarjetas de altura, cabeza y piernas.
+   Cada una define --acento y --acento-txt, y de ahi salen los botones, el numero y el riel. */
+.seccion[data-seccion="cabeza"] { --acento:var(--cabeza);  --acento-txt:var(--cabeza-txt);  --acento-suave:var(--cabeza-suave) }
+.seccion[data-seccion="piernas"]{ --acento:var(--piernas); --acento-txt:var(--piernas-txt); --acento-suave:var(--piernas-suave) }
+.seccion[data-seccion="altura"] { --acento:var(--altura);  --acento-txt:var(--altura-txt);  --acento-suave:var(--altura-suave) }
+.seccion{border-top:4px solid var(--acento)!important}
+.seccion.en-movimiento{box-shadow:0 0 0 3px var(--acento)!important}
+.titulo-tarjeta{font-size:1.3rem}
+
+/* Numero grande de la lectura */
+.cifra{
+  font-family:var(--bs-font-monospace);font-weight:600;
+  font-size:clamp(2.9rem,12vw,4.1rem);line-height:.85;
+  letter-spacing:-.03em;color:var(--acento-txt);
+  font-variant-numeric:tabular-nums;
+}
+.cifra .unidad{font-size:.4em;margin-left:.08em;letter-spacing:0}
+.dato-destino{font-size:1.05rem}
+.campo-angulo{font-size:1.15rem}
+
+/* Riel de recorrido. No usa .progress de Bootstrap porque el relleno
+   crece desde el cero, que puede estar en medio de la escala. */
+.riel-pista{
+  position:relative;height:14px;border-radius:7px;overflow:hidden;
+  background:var(--bs-tertiary-bg);border:1px solid var(--bs-border-color);
+}
+.riel-relleno{position:absolute;inset-block:0;background:var(--acento);opacity:.45}
+.riel-cero{position:absolute;inset-block:0;width:2px;background:#56657a}
+.riel-aguja{position:absolute;inset-block:-3px;width:5px;border-radius:2px;background:var(--acento-txt);transform:translateX(-50%)}
+.riel-escala{position:relative;height:16px;font-size:.78rem}
+.riel-escala span{position:absolute;top:0;white-space:nowrap}
+.riel-min{left:0}
+.riel-max{right:0}
+.riel-ref{transform:translateX(-50%)}

@@ -1,0 +1,24 @@
+<!-- 2 · Otro lo tiene: pedirselo -->
+<div class="modal fade" id="modalSolicitar" tabindex="-1" aria-labelledby="tSolicitar" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4 modal-tope tope-altura">
+      <div class="modal-body p-4 d-flex flex-column gap-3">
+        <span class="d-grid rounded-3 icono-marco tono-altura" aria-hidden="true">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 11-7.4"/><path d="M18 15v6"/><path d="M15 18h6"/>
+          </svg>
+        </span>
+        <h2 class="tipo-titulo mb-0 titulo-modal" id="tSolicitar">
+          <span id="solicitarNombre">Antonio</span> tiene el control
+        </h2>
+        <p class="mb-0 text-body-secondary">
+          Por ahora solo puedes mirar. Si necesitas mover la camilla, pídele el control: le aparecerá un aviso en su pantalla y decidirá si te lo pasa.
+        </p>
+        <div class="d-flex gap-2 flex-wrap">
+          <button type="button" class="btn btn-primary btn-lg flex-fill tipo-titulo text-uppercase fw-semibold btn-accion" id="btnSolicitarControl">Solicitar el control</button>
+          <button type="button" class="btn btn-outline-secondary btn-lg flex-fill tipo-titulo text-uppercase fw-semibold btn-accion btn-accion-sec" id="btnSolicitarNo">Seguir solo mirando</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

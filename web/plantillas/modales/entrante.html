@@ -1,0 +1,30 @@
+<!-- 4 · Alguien me pide el control -->
+<div class="modal fade" id="modalEntrante" tabindex="-1" aria-labelledby="tEntrante" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4 modal-tope tope-piernas">
+      <div class="modal-body p-4 d-flex flex-column gap-3">
+        <span class="d-grid rounded-3 icono-marco tono-piernas" aria-hidden="true">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 19h16"/>
+          </svg>
+        </span>
+        <h2 class="tipo-titulo mb-0 titulo-modal" id="tEntrante">
+          <span id="entranteNombre">Ana</span> quiere tomar el control
+        </h2>
+        <p class="mb-0 text-body-secondary">
+          Si le das el control, tu pantalla queda en solo lectura hasta que te lo devuelvan. El paro de emergencia te sigue funcionando igual.
+        </p>
+        <div class="d-flex align-items-center gap-2">
+          <span class="tipo-dato fw-semibold flex-shrink-0 cuenta-segundos text-body-secondary" id="entranteSegundos">30 s</span>
+          <div class="progress flex-grow-1 cuenta-progreso" role="progressbar" aria-label="Tiempo para decidir">
+            <div class="progress-bar cuenta-barra cuenta-barra-piernas" id="entranteBarra"></div>
+          </div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <button type="button" class="btn btn-success btn-lg flex-fill tipo-titulo text-uppercase fw-semibold btn-accion btn-decision" id="btnPermitir">Permitir</button>
+          <button type="button" class="btn btn-outline-danger btn-lg flex-fill tipo-titulo text-uppercase fw-semibold btn-accion btn-decision" id="btnDenegar">No permitir</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

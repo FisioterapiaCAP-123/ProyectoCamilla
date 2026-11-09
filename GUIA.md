@@ -44,7 +44,7 @@ Funciones disponibles:
   Celular, tablet o PC                   Raspberry Pi 4
  +---------------------+          +-------------------------------------------+
  | Navegador           |   HTTP   | web/servidor.py (puerto 8000)             |
- | web/index.html      |<-------->|   Entrega la página y atiende las órdenes |
+ | Panel web           |<-------->|   Entrega la página y atiende las órdenes |
  +---------------------+   WiFi   |   Reglas del control y estado en memoria  |
                                   |   Vigilancia de seguridad cada 0.5 s      |
                                   |   web/basedatos.py --> web/camilla.db     |
@@ -55,8 +55,8 @@ Funciones disponibles:
 
 | Componente | Archivos o programas | Función |
 |---|---|---|
-| Panel web | `web/index.html`, `web/vendor/` | Interfaz completa en una sola página. Bootstrap 5.3.3 y las fuentes se entregan desde la propia Raspberry, porque la red Camilla no tiene internet. |
-| Servidor | `web/servidor.py` | Entrega la página, atiende las órdenes, aplica las reglas del control y guarda el estado compartido. Usa solo la biblioteca estándar de Python. |
+| Panel web | `web/plantillas/`, `web/publico/` | Interfaz completa en una sola página: HTML en parciales, estilos y módulos JavaScript separados por función. Bootstrap 5.3.3 y las fuentes se entregan desde la propia Raspberry, porque la red Camilla no tiene internet. |
+| Servidor | `web/servidor.py`, `web/paginas.py` | Entrega la página, atiende las órdenes, aplica las reglas del control y guarda el estado compartido. Usa solo la biblioteca estándar de Python. |
 | Base de datos | `web/basedatos.py`, `web/camilla.db` | Perfiles y registros de pacientes en SQLite. |
 | Red | `red/instalar_red.sh`, `red/encender_red.sh`, `hostapd`, `dnsmasq`, `nftables` | Crea la red WiFi, entrega direcciones IP y dirige a los celulares hacia la página. |
 
@@ -90,15 +90,26 @@ Funciones disponibles:
 │   └── encender_red.sh         Enciende y apaga la red y la página
 └── web/
     ├── servidor.py             Servidor web y reglas del control
+    ├── paginas.py              Compone el HTML y entrega los archivos públicos
     ├── basedatos.py            Perfiles, pacientes y comandos de terminal
-    ├── index.html              Panel completo: HTML, CSS y JavaScript
     ├── camilla.db              Base de datos; se crea sola y no se sube a git
-    └── vendor/
-        ├── bootstrap.min.css
-        ├── bootstrap.bundle.min.js
-        ├── fuentes.css
-        └── fuentes/            Barlow Condensed, IBM Plex Mono, IBM Plex Sans y su licencia
+    ├── plantillas/             HTML del panel, separado en parciales
+    │   ├── index.html          Esqueleto de la página
+    │   ├── login.html
+    │   ├── paro-flotante.html
+    │   ├── panel/              Encabezado, pestañas y sus contenidos
+    │   └── modales/            Un archivo por ventana modal
+    └── publico/                Lo único accesible por HTTP
+        ├── css/                Estilos propios, por función
+        ├── js/                 Módulos JavaScript del panel
+        └── vendor/
+            ├── bootstrap.min.css
+            ├── bootstrap.bundle.min.js
+            ├── fuentes.css
+            └── fuentes/        Barlow Condensed, IBM Plex Mono, IBM Plex Sans y su licencia
 ```
+
+La función de cada archivo y qué se modifica en él están en [Estructura del panel web](INTEGRACION.md#10-estructura-del-panel-web).
 
 `.gitignore` excluye `__pycache__/`, `*.pyc` y `web/camilla.db*`.
 
@@ -380,9 +391,9 @@ La lista completa está en [INTEGRACION.md](INTEGRACION.md#11-comportamientos-a-
 
 | Archivo modificado | Qué hacer |
 |---|---|
-| `web/index.html` | Guardar y recargar la página en el navegador. No hace falta reiniciar. |
+| `web/plantillas/`, `web/publico/` | Guardar y recargar la página en el navegador. No hace falta reiniciar. |
 | `web/servidor.py` | Reiniciar la página: ENTER y otra vez `./encender_red.sh`, o **Ctrl+C** y otra vez `python3 web/servidor.py`. |
-| `web/basedatos.py` | Igual que `web/servidor.py`. |
+| `web/paginas.py`, `web/basedatos.py` | Igual que `web/servidor.py`. |
 | Roles o contraseñas desde la terminal | No hay que reiniciar. Quien tenga la página abierta debe salir y volver a entrar para ver su rol nuevo. |
 
 - Los archivos de la página se leen cada vez que alguien la abre.

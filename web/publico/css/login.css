@@ -1,0 +1,5 @@
+/* Pantalla de inicio de sesion y creacion de perfil */
+.login-marco{min-height:70vh;padding-block:1.5rem 5rem}
+.login-caja{max-width:420px;width:100%}
+.titulo-login{font-size:2.1rem}
+.subtitulo-login{letter-spacing:.09em}

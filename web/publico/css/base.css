@@ -1,0 +1,28 @@
+/* Estructura general y piezas compartidas por varias vistas.
+   Rejilla, tarjetas, modales, toasts y formularios son de Bootstrap. */
+body{
+  background:var(--bs-body-bg);
+  color:var(--bs-body-color);
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+  padding-block:18px 0;
+  -webkit-text-size-adjust:100%;
+}
+.envoltorio{max-width:1480px;margin-inline:auto}
+.vista[hidden]{display:none!important}
+
+/* Tipografia */
+.tipo-titulo{font-family:var(--titulo);letter-spacing:.04em;line-height:1.1}
+.tipo-dato{font-family:var(--bs-font-monospace);font-variant-numeric:tabular-nums}
+
+/* Rotulos de los campos de formulario */
+.rotulo-campo{font-size:1.1rem}
+.rotulo-campo-compacto{font-size:1.05rem}
+
+/* Cuadro cuadrado que enmarca un icono */
+.icono-marco{width:54px;height:54px;place-items:center}
+.icono-marco-chico{width:40px;height:40px;place-items:center}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}

@@ -1,0 +1,20 @@
+/* Pestanas del administrador (Control / Registros / Usuarios) y sus tablas */
+.pestanas .nav-link{
+  font-family:var(--titulo);font-size:1.15rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--bs-body-color);background:var(--bs-tertiary-bg);border:2px solid var(--bs-border-color);
+  min-height:48px;white-space:nowrap;
+}
+.pestanas .nav-link:hover{border-color:var(--bs-primary)}
+.pestanas .nav-link.active{color:#fff;background:var(--bs-primary);border-color:var(--bs-primary)}
+.tabla-admin th{
+  font-family:var(--titulo);font-size:.95rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--bs-secondary-color);background:var(--bs-tertiary-bg);
+}
+.tabla-admin td{padding-block:.7rem}
+.pestana-admin{padding-bottom:96px}   /* que el paro flotante no tape la ultima fila */
+
+.titulo-admin{font-size:1.5rem;font-weight:600}
+.cuenta-registros{font-size:.8rem}
+.buscador-admin{max-width:260px}
+.campo-edad{max-width:220px}
+.tarjeta-paciente{border-top:4px solid var(--altura)!important}

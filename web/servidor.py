@@ -4,10 +4,10 @@ import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
 from urllib.parse import urlsplit
 
 import basedatos
+import paginas
 
 PUERTO_WEB = 8000
 IP_RED = "10.42.0.1"  # IP de la Raspberry en su propia red WiFi "Camilla"
@@ -16,20 +16,10 @@ TIEMPO_LIBERAR = 10  # segundos sin noticias de quien tiene el control para libe
 ESPERA_SOLICITUD = 35  # segundos que dura un pedido de control sin respuesta (las paginas cuentan 30)
 HOMBRE_MUERTO = 1.0  # segundos sin "mover" para parar un motor continuo (la pagina lo repite mientras se mantiene el boton)
 SESION_HORAS = 12  # una sesion que no se usa en este tiempo se borra
-LIMITES = {"cabeza": (-30, 70), "piernas": (0, 45)}  # grados: iguales a CONFIG en index.html
+LIMITES = {"cabeza": (-30, 70), "piernas": (0, 45)}  # grados: iguales a CONFIG en publico/js/config.js
 SECCIONES = ("altura", "cabeza", "piernas")
 
-CARPETA = Path(__file__).parent  # los archivos se leen en cada visita: al editarlos basta con recargar la pagina
-# Bootstrap y fuentes guardados en web/vendor/: la pagina se ve igual sin internet (en la red Camilla no hay)
-ARCHIVOS = {
-    "/": ("index.html", "text/html; charset=utf-8"),
-    "/vendor/bootstrap.min.css": ("vendor/bootstrap.min.css", "text/css; charset=utf-8"),
-    "/vendor/bootstrap.bundle.min.js": ("vendor/bootstrap.bundle.min.js", "text/javascript; charset=utf-8"),
-    "/vendor/fuentes.css": ("vendor/fuentes.css", "text/css; charset=utf-8"),
-}
-for _fuente in (CARPETA / "vendor" / "fuentes").glob("*.woff2"):
-    ARCHIVOS["/vendor/fuentes/" + _fuente.name] = ("vendor/fuentes/" + _fuente.name, "font/woff2")
-SILENCIO = ("/api/estado", "/api/mover", "/api/paso", "/vendor/")  # se piden muy seguido: no se anotan en el registro
+SILENCIO = ("/api/estado", "/api/mover", "/api/paso", "/vendor/", "/css/", "/js/")  # se piden muy seguido: no se anotan en el registro
 
 candado = threading.Lock()  # una cosa a la vez: todo el estado de la camilla
 
@@ -346,9 +336,10 @@ class Manejador(BaseHTTPRequestHandler):
             with candado:
                 datos = camilla.estado(camilla.sesion_de(token), token)
             self.json(200, datos)
-        elif ruta in ARCHIVOS:
-            nombre, tipo = ARCHIVOS[ruta]
-            self.responder(200, (CARPETA / nombre).read_bytes(), tipo)
+        elif ruta == "/":
+            self.responder(200, *paginas.pagina())
+        elif archivo := paginas.archivo_publico(ruta):
+            self.responder(200, *archivo)
         else:
             self.responder(404, b"No encontrado", "text/plain")
 
@@ -445,6 +436,7 @@ class Manejador(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    paginas.pagina()  # si falta un parcial, que falle aqui y no con la primera visita
     basedatos.iniciar()
     if not basedatos.hay_admin():
         print("Aviso: no hay administrador. Crea tu perfil en la pagina y luego:  python3 web/basedatos.py admin TU_USUARIO")

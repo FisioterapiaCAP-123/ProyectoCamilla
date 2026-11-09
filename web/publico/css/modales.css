@@ -1,0 +1,27 @@
+/* Modales y avisos: la estructura y las animaciones son de Bootstrap */
+.modal-tope{border-top-width:6px;border-top-style:solid}
+.tope-altura{border-top-color:var(--altura)}
+.tope-piernas{border-top-color:var(--piernas)}
+.tope-peligro{border-top-color:var(--bs-danger)}
+.tope-neutro{border-top-color:#56657a}
+
+.titulo-modal{font-size:1.8rem;font-weight:600}
+.tono-altura{background:var(--altura-suave);color:var(--altura-txt)}
+.tono-piernas{background:var(--piernas-suave);color:var(--piernas-txt)}
+.tono-peligro{background:#fbe4e4;color:#9e1c1c}
+.spinner-modal{width:26px;height:26px;border-width:3px}
+
+/* Cuenta regresiva de los pedidos de control */
+.cuenta-segundos{font-size:.9rem}
+.cuenta-progreso{height:9px}
+.cuenta-barra{width:100%;transition:width 1s linear}
+.cuenta-barra-piernas{background:var(--piernas)}
+
+/* Toasts */
+.zona-toasts{
+  z-index:1090;
+  top:calc(14px + env(safe-area-inset-top, 0px));
+}
+.aviso-ok{color:#13572f}
+.aviso-error{color:#9e1c1c}
+.aviso-info{color:var(--bs-body-color)}

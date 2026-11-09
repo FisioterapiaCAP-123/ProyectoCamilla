@@ -1,0 +1,23 @@
+<!-- 1 · Nadie opera la camilla -->
+<div class="modal fade" id="modalTomar" tabindex="-1" aria-labelledby="tTomar" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4 modal-tope tope-altura">
+      <div class="modal-body p-4 d-flex flex-column gap-3">
+        <span class="d-grid rounded-3 icono-marco tono-altura" aria-hidden="true">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 11V6a1.5 1.5 0 0 1 3 0v5"/><path d="M12 11V5a1.5 1.5 0 0 1 3 0v6"/>
+            <path d="M15 11V7a1.5 1.5 0 0 1 3 0v8a6 6 0 0 1-6 6h-1a6 6 0 0 1-6-6v-3a1.5 1.5 0 0 1 3 0"/>
+          </svg>
+        </span>
+        <h2 class="tipo-titulo mb-0 titulo-modal" id="tTomar">Nadie está operando la camilla</h2>
+        <p class="mb-0 text-body-secondary">
+          Si tomas el control, eres el único que puede moverla. Los demás dispositivos quedan en solo lectura hasta que lo liberes.
+        </p>
+        <div class="d-flex gap-2 flex-wrap">
+          <button type="button" class="btn btn-primary btn-lg flex-fill tipo-titulo text-uppercase fw-semibold btn-accion" id="btnTomarControl">Tomar el control</button>
+          <button type="button" class="btn btn-outline-secondary btn-lg flex-fill tipo-titulo text-uppercase fw-semibold btn-accion btn-accion-sec" id="btnTomarNo">Ahora no</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

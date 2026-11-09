@@ -1,0 +1,23 @@
+<!-- 7 · Contrasena nueva para otro perfil -->
+<div class="modal fade" id="modalClave" tabindex="-1" aria-labelledby="tClave" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4 modal-tope tope-altura">
+      <form class="modal-body p-4 d-flex flex-column gap-3" id="formClave" novalidate>
+        <h2 class="tipo-titulo mb-0 titulo-modal" id="tClave">
+          Contraseña nueva para <span id="claveNombre"></span>
+        </h2>
+        <p class="mb-0 text-body-secondary">Díctasela a la persona: con ella entra a partir de ahora.</p>
+        <div>
+          <label for="claveNueva" class="form-label tipo-titulo text-uppercase fw-semibold rotulo-campo-compacto">Contrase&ntilde;a nueva</label>
+          <input type="text" class="form-control form-control-lg tipo-dato" id="claveNueva" autocomplete="off" spellcheck="false" autocapitalize="none">
+          <div class="form-text">Mínimo 6 caracteres: solo letras y números, sin tildes, símbolos ni espacios.</div>
+          <div class="invalid-feedback" id="claveNuevaAviso"></div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <button type="submit" class="btn btn-primary btn-lg flex-fill tipo-titulo text-uppercase fw-semibold btn-accion">Cambiar</button>
+          <button type="button" class="btn btn-outline-secondary btn-lg flex-fill tipo-titulo text-uppercase fw-semibold btn-accion btn-accion-sec" id="btnClaveNo">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

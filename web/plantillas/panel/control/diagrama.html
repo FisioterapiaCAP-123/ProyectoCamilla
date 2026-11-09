@@ -1,0 +1,78 @@
+<div class="col-12 col-xxl-7">
+  <section class="card border shadow-sm rounded-4 h-100">
+    <div class="card-header bg-body-tertiary">
+      <h2 class="tipo-titulo text-uppercase mb-0 titulo-tarjeta">Posición actual</h2>
+    </div>
+    <div class="card-body d-flex flex-column gap-3">
+
+      <div class="lienzo bg-body-tertiary border rounded-3 p-1">
+        <svg viewBox="0 0 640 430" role="img" aria-labelledby="tituloCamilla">
+          <title id="tituloCamilla">Vista lateral de la camilla: altura del elevador e inclinación de la sección de cabeza y la de piernas</title>
+
+          <line class="piso" x1="34" y1="388" x2="606" y2="388"/>
+
+          <g class="elevador" id="elevador">
+            <rect id="piston" x="299" y="251" width="42" height="89" rx="5"/>
+            <rect x="288" y="300" width="64" height="54" rx="6"/>
+          </g>
+          <g class="estructura">
+            <rect x="252" y="354" width="136" height="15" rx="7"/>
+          </g>
+          <circle class="rueda" cx="272" cy="377" r="11"/>
+          <circle class="rueda" cx="368" cy="377" r="11"/>
+
+          <g class="flecha-elevador" id="flechaArriba" hidden>
+            <path d="M370 328 l10 -12 l10 12"/>
+            <path d="M370 342 l10 -12 l10 12"/>
+          </g>
+          <g class="flecha-elevador" id="flechaAbajo" hidden>
+            <path d="M370 316 l10 12 l10 -12"/>
+            <path d="M370 330 l10 12 l10 -12"/>
+          </g>
+
+          <g id="conjunto">
+            <line class="ref" x1="248" y1="240" x2="118" y2="240"/>
+            <line class="ref" x1="392" y1="240" x2="522" y2="240"/>
+
+            <path class="arco arco-cabeza" id="arcoCabeza"></path>
+            <path class="arco arco-piernas" id="arcoPiernas"></path>
+            <text class="etq-arco cabeza" id="etqArcoCabeza"></text>
+            <text class="etq-arco piernas" id="etqArcoPiernas"></text>
+
+            <g class="seg seg-asiento">
+              <rect class="pad" x="252" y="229" width="136" height="22" rx="4"/>
+            </g>
+
+            <g class="seg seg-cabeza" id="segCabeza">
+              <rect class="halo" x="74" y="229" width="172" height="22" rx="11"/>
+              <rect class="pad" x="74" y="229" width="172" height="22" rx="11"/>
+              <rect class="franja" x="80" y="231" width="160" height="4" rx="2"/>
+              <rect class="almohada" x="88" y="213" width="52" height="16" rx="8"/>
+            </g>
+
+            <g class="seg seg-piernas" id="segPiernas">
+              <rect class="halo" x="394" y="229" width="172" height="22" rx="11"/>
+              <rect class="pad" x="394" y="229" width="172" height="22" rx="11"/>
+              <rect class="franja" x="400" y="231" width="160" height="4" rx="2"/>
+            </g>
+
+            <circle class="pivote" cx="248" cy="240" r="5"/>
+            <circle class="pivote" cx="392" cy="240" r="5"/>
+          </g>
+
+          <text class="etq-zona" x="152" y="414">CABEZA</text>
+          <text class="etq-zona" x="482" y="414">PIERNAS</text>
+        </svg>
+      </div>
+
+      <div class="d-flex flex-wrap gap-3 small text-body-secondary">
+        <span class="d-inline-flex align-items-center gap-2"><i class="punto a" aria-hidden="true"></i> Altura</span>
+        <span class="d-inline-flex align-items-center gap-2"><i class="punto c" aria-hidden="true"></i> Cabeza</span>
+        <span class="d-inline-flex align-items-center gap-2"><i class="punto p" aria-hidden="true"></i> Piernas</span>
+        <span class="d-inline-flex align-items-center gap-2"><i class="punto f" aria-hidden="true"></i> Asiento (fijo)</span>
+        <span class="ms-auto">La parte que se mueve se ilumina</span>
+      </div>
+
+    </div>
+  </section>
+</div>
