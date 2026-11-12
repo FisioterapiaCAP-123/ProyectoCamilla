@@ -2,7 +2,8 @@
 
 Se guarda en la placa como main.py con Thonny y arranca solo al recibir energia.
 Recibe las ordenes de la Raspberry por el cable USB y mueve las piernas con un
-puente H BTS7960 (o L298N) o, con MODULO = "reles", la cabeza con el modulo de 4 reles.
+puente H BTS7960 y la cabeza con un L298N. Con MODULO = "reles", solo la cabeza,
+con el modulo de 4 reles.
 
 Ordenes que recibe, una por linea, terminadas en *XX (comprobacion en hexadecimal):
     M piernas 1    mover la seccion: 1 extiende, -1 retrae. Se debe repetir cada 200 ms
@@ -10,8 +11,8 @@ Ordenes que recibe, una por linea, terminadas en *XX (comprobacion en hexadecima
     X              detener todo
     P              la Raspberry sigue conectada
 
-A cada orden valida responde:
-    E piernas=detenido*XX
+A cada orden valida responde con el estado de todas las secciones:
+    E cabeza=detenido piernas=detenido*XX
 
 Seguridad:
     - Una seccion se detiene sola si pasan LIMITE_SIN_ORDEN_MS sin recibir su M.
@@ -26,10 +27,12 @@ import machine
 from machine import PWM, Pin
 
 # ---------- CONFIGURACION ----------
-MODULO = "puente"           # "puente": piernas con BTS7960 o L298N | "reles": cabeza con 4 reles
-PIN_EXTENDER = 26           # puente H: RPWM del BTS7960 o IN1 del L298N
-PIN_RETRAER = 27            # puente H: LPWM del BTS7960 o IN2 del L298N
-PIN_HABILITAR = None        # puente H: ENA o R_EN+L_EN; None si van con jumper o a 3.3 V
+MODULO = "puente"           # "puente": piernas (BTS7960) y cabeza (L298N) | "reles": cabeza con 4 reles
+PIN_EXTENDER = 26           # piernas, BTS7960: RPWM
+PIN_RETRAER = 27            # piernas, BTS7960: LPWM
+PIN_HABILITAR = None        # piernas, BTS7960: R_EN+L_EN; None si van a 3.3 V
+CABEZA_EXTENDER = 18        # cabeza, L298N: IN1 (ENA con su jumper)
+CABEZA_RETRAER = 19         # cabeza, L298N: IN2
 VELOCIDAD = 100             # puente H: potencia en % (0 a 100)
 FRECUENCIA_PWM = 1000       # puente H: Hz
 ACTIVO_BAJO = True          # reles: True si el modulo se activa con 0
@@ -146,6 +149,7 @@ class Seccion:
 
 # Una entrada por seccion. Los nombres deben ser los de la pagina: altura, cabeza, piernas.
 # Con puente H, los dos actuadores de piernas van en paralelo en el mismo BTS7960.
+# La cabeza tiene por ahora un solo actuador, en el canal A del L298N.
 if MODULO == "reles":
     SECCIONES = {
         "cabeza": Seccion([ParReles(26, 27), ParReles(25, 33)]),
@@ -153,6 +157,7 @@ if MODULO == "reles":
 else:
     SECCIONES = {
         "piernas": Seccion([PuenteH(PIN_EXTENDER, PIN_RETRAER, PIN_HABILITAR)]),
+        "cabeza": Seccion([PuenteH(CABEZA_EXTENDER, CABEZA_RETRAER)]),
     }
 
 

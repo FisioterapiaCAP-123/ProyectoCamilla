@@ -8,7 +8,8 @@
 - Con los motores en marcha aparecen **errores USB** (`urb stopped: -32`) que dejaban el puerto mudo hasta reiniciar el servidor. `web/hardware.py` ya reabre el puerto solo (commit `99a91cf`, en GitHub). **Falta bajarlo en la Raspberry y probarlo con motores.**
 - El módulo de relés es **solo para la presentación del viernes 13-11-2026**. El definitivo es **un BTS7960 por sección** (ver "Hardware").
 - **09-11, tarde:** el compañero actualizó su código para manejar un puente H (L298N o BTS7960) en los pines 25 y 26. `esp32/main.py` se adaptó: ahora usa `MODULO = "puente"` por omisión, y los relés quedan como opción. **Se cargó en la placa real y funcionó con el puente H en Cabeza**: subir, bajar y parar desde la página, sin cortes del ESP32 durante unos 3 minutos de prueba. Está en el commit `fa1a602`, en GitHub.
-- **11-11: llegó el MD-BTS7960 y se decidió empezar por Piernas, no por Cabeza.** El compañero ya probó los 2 actuadores de Piernas en un solo BTS7960 y aguantó, con su código (WiFi y PWM; copia en `compi.txt`, que **tiene la clave del WiFi: no se sube**). Ese código usa **GPIO 26 → RPWM y GPIO 27 → LPWM**; su comentario dice 25 y 26, pero lo que funcionó fue 26 y 27. `esp32/main.py` ahora maneja `piernas` en el modo `puente` con esos pines, siempre al 100 %. `config.js` le puso `continua` y `sinTope` a Piernas. Cabeza queda "Sin actuador" hasta tener su propio puente H.
+- **11-11: llegó el MD-BTS7960 y se decidió empezar por Piernas, no por Cabeza.** El compañero ya probó los 2 actuadores de Piernas en un solo BTS7960 y aguantó, con su código (WiFi y PWM; copia en `compi.txt`, que **tiene la clave del WiFi: no se sube**). Ese código usa **GPIO 26 → RPWM y GPIO 27 → LPWM**; su comentario dice 25 y 26, pero lo que funcionó fue 26 y 27. `esp32/main.py` ahora maneja `piernas` en el modo `puente` con esos pines, siempre al 100 %. `config.js` le puso `continua` y `sinTope` a Piernas. Subido en `1d4ed7d`, y Piernas **funcionó en la placa real** con el BTS7960.
+- **11-11, después:** mientras llega otro BTS7960, Cabeza va en un **L298N** (el rojo) con **1 solo actuador**, porque falta que llegue el otro. Se usan los pines del nuevo código del compañero (`compi.txt`): **GPIO 18 → IN1 (extender) y GPIO 19 → IN2 (retraer)**, con ENA en su jumper. `esp32/main.py` ahora tiene las dos secciones en modo `puente` (`CABEZA_EXTENDER` y `CABEZA_RETRAER`). Probado en simulación sin fallas (`probar_dos_puentes.py` y `probar_panel_dos.py`). **Sin commit, por pedido del usuario**: no subir nada sin que lo pida explícitamente. Se lleva a la Raspberry cuando el usuario decida (git, Thonny o scp).
 - **10-11: se habló de sensores de ángulo para Cabeza y Piernas.** Ver "Propuestas → Sensores de ángulo".
 - **11-11: el usuario eligió un encoder óptico absoluto en código Gray para Piernas, de 0° a 90°**, con LED y fototransistores sueltos que arma él, e impreso en 3D por un compañero. El usuario lo movió a la **rama local `backup-cambios-esp32`** (commit `ce2474a`, carpeta `encoder/`). Ese commit también guarda `codigoesp32.txt` con la clave del WiFi: **no subir esa rama así**; para publicar el encoder, armar una rama sin ese archivo. Primero se arma un **banco de prueba** que se gira a mano. Guía visual: https://claude.ai/artifact/MAu8PJ5JfVQvSUGJZH4XQU. Ver "Encoder de piernas".
 - Rama `esp32-conexion`, en GitHub en `fa1a602`. En el PC la rama sigue enlazada a `origin/optimizaciones-esp32`, así que hay que subir con `git push origin esp32-conexion`.
@@ -16,7 +17,7 @@
 **Siguiente, en orden:**
 
 1. **Bajar el código en la Raspberry** con `git pull` y **volver a cargar `esp32/main.py` en el ESP32 con Thonny** (Upload to /), porque cambió a `piernas` en 26 y 27. Comprobar en Thonny con `print("piernas" in open("main.py").read())`, que debe dar `True`. Al levantar el servidor debe salir `ESP32 conectado en /dev/ttyUSB0: piernas`. Probar subir, bajar y parar Piernas. Si sube cuando debería bajar, intercambiar `PIN_EXTENDER` y `PIN_RETRAER`. Si se corta, debe salir `se perdio la conexion con el ESP32: dejo de responder` y luego `ESP32 conectado`, sin reiniciar nada.
-2. **Cabeza:** otro BTS7960 en pines libres (por ejemplo, 25 y 33), y lo de la "Lista de compra".
+2. **Cabeza en el L298N (18 y 19), con 1 actuador:** llevar `main.py` a la placa y probar. El L298N aguanta unos 2 A por canal y el 3000N llega a 3 A: probarlo suelto, en tandas cortas y tocando el disipador. Después, un BTS7960 propio para Cabeza con sus 2 actuadores.
 3. **Probar con la red Camilla** desde el celular (ver "Comandos"): la página no debe perder la conexión mientras se mueve el motor. Luego, hacer el conteo de errores USB. Al escribir esto, el usuario no había reportado el resultado.
 4. **Detener los registros** que quedaron corriendo en la Raspberry (ver "Diagnóstico").
 5. **Piernas con BTS7960:** firmware y página listos el 11-11. Se probaron con simulación: el firmware con PWM falso y el panel en Chrome contra el firmware falso. Falta la prueba en la Raspberry (paso 1).
@@ -111,6 +112,8 @@ web/
   | 27 (`PIN_RETRAER`) | LPWM | IN2 | Retraer |
   | `PIN_HABILITAR = None` | R_EN y L_EN a 3.3 V | ENA con jumper | Habilitar. Con un GPIO, se apaga al parar. |
 
+  Cabeza, en el mismo modo, con un L298N y 1 actuador: GPIO 18 (`CABEZA_EXTENDER`) → IN1 y GPIO 19 (`CABEZA_RETRAER`) → IN2, ENA con jumper.
+
   Usa PWM a 1000 Hz con `VELOCIDAD = 100` %. Las salidas se crean en 0, aunque el PWM de la placa arranque a medias.
 - **`"reles"`**: el módulo de 4 relés para **Cabeza**, activo en bajo (`ACTIVO_BAJO = True`), con 26→IN1, 27→IN2, 25→IN3 y 33→IN4. Usa los mismos 26 y 27: no se pueden tener relés y BTS7960 a la vez.
 
@@ -169,11 +172,11 @@ ESP32 -> Raspberry    E piernas=detenido
    - Sin TVS al principio: no hay contactos que chispeen y trae diodos internos. Se confirma con la prueba de conteo de errores.
    - Control. Desde el 11-11 Piernas está programada en modo puente con los pines del compañero; Cabeza queda para después, sin programar:
 
-     | Pin del módulo | Piernas (programado) | Cabeza (propuesta) |
+     | Pin del módulo | Piernas (programado) | Cabeza (hoy en L298N) |
      |---|---|---|
-     | RPWM (extender) | GPIO 26 | GPIO 25 |
-     | LPWM (retraer) | GPIO 27 | GPIO 33 |
-     | R_EN y L_EN, unidos | 3.3 V | 3.3 V, o GPIO 13 con habilitar |
+     | RPWM (extender) / IN1 | GPIO 26 | GPIO 18 |
+     | LPWM (retraer) / IN2 | GPIO 27 | GPIO 19 |
+     | R_EN y L_EN / ENA | 3.3 V | jumper puesto |
 
      El artifact del cableado BTS7960 todavía muestra la propuesta vieja (Cabeza en 25/26/27 y Piernas en 18/19/21). Manda esta tabla.
 
@@ -342,7 +345,7 @@ Falta un paro físico que corte la energía de los motores sin depender de ningu
 
 **WebSocket:** `aiohttp` en el mismo puerto (`apt install python3-aiohttp`). Pasa de hilos a asyncio. En la página cambian `api/sondeo.js` y `api/ordenes.js`. Mantener `POST /api/paro` como segunda vía.
 
-**Hardware final, además del BTS7960:** paro de hongo con contactor que corte la fuente de motores. Pines ocupados o reservados (11-11): Piernas 26 y 27; Cabeza propuesta 25, 33 y 13; encoder 32, 23 y 34. Para la altura, otro BTS7960 en pines que no choquen con esos (por ejemplo, 18, 19 y 21). Dejar 35, 36 y 39 para sensores; del 34 al 39 son solo de entrada. Evitar 0, 2, 5, 12 y 15, que son pines de arranque. Más adelante, R_IS y L_IS podrían detectar un atasco, con divisor a 3.3 V.
+**Hardware final, además del BTS7960:** paro de hongo con contactor que corte la fuente de motores. Pines ocupados o reservados (11-11): Piernas 26 y 27; Cabeza 18 y 19; encoder 32, 23 y 34. Para la altura, otro BTS7960 en pines que no choquen con esos (por ejemplo, 25 y 33). Dejar 35, 36 y 39 para sensores; del 34 al 39 son solo de entrada. Evitar 0, 2, 5, 12 y 15, que son pines de arranque. Más adelante, R_IS y L_IS podrían detectar un atasco, con divisor a 3.3 V.
 
 ### Encoder de piernas (diseñado el 11-11, sin probar con piezas reales)
 
