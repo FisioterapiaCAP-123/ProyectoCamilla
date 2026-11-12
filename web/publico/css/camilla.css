@@ -18,19 +18,13 @@
 .halo{fill:none;stroke-width:3;opacity:0}
 .seg-cabeza  .halo{stroke:var(--cabeza)}
 .seg-piernas .halo{stroke:var(--piernas)}
-.seg{transition:transform .16s ease-out}
+/* .seg sin transicion: el bucle lo anima dibujo.js cuadro a cuadro y al reiniciar debe saltar, como un GIF */
 #conjunto{transition:transform .12s linear}
 .seg-cabeza.activo  .pad{fill:var(--cabeza)}
 .seg-piernas.activo .pad{fill:var(--piernas)}
 .seg.activo .halo{animation:latido 1.1s ease-in-out infinite}
 .seg.activo .franja{fill:#fff}
 @keyframes latido{ 0%,100%{opacity:.55;stroke-width:3} 50%{opacity:0;stroke-width:12} }
-.arco{fill:none;stroke-width:3.5;stroke-linecap:round}
-.arco-cabeza{stroke:var(--cabeza-txt)}
-.arco-piernas{stroke:var(--piernas-txt)}
-.etq-arco{font-family:var(--bs-font-monospace);font-size:20px;font-weight:600;text-anchor:middle;dominant-baseline:middle}
-.etq-arco.cabeza{fill:var(--cabeza-txt)}
-.etq-arco.piernas{fill:var(--piernas-txt)}
 .etq-zona{font-family:var(--titulo);font-size:21px;font-weight:600;letter-spacing:.12em;text-anchor:middle;fill:#3b4857}
 
 .punto{width:12px;height:12px;border-radius:3px;flex:none;display:inline-block}

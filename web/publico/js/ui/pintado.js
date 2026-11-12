@@ -1,7 +1,7 @@
 /* Lleva el estado a la pantalla. Solo lee estado.js: nunca manda ordenes. */
-import { CONFIG, SECCIONES, SECCIONES_NUMERICAS, SUFIJO } from '../config.js';
+import { CONFIG, SECCIONES, SUFIJO } from '../config.js';
 import { control, estaMoviendo, panel, puedeMover } from '../estado.js';
-import { conSigno, porId } from '../utilidades.js';
+import { porId } from '../utilidades.js';
 import { pintarDibujo } from './dibujo.js';
 
 const el = {
@@ -13,7 +13,6 @@ const el = {
   cintaHardware: porId('cintaHardware'),
   btnParo:      porId('btnParo'),
   txtParo:      porId('txtParo'),
-  btnPlano:     porId('btnPlano'),
   btnBloqueo:   porId('btnBloqueo'),
   txtBloqueo:   porId('txtBloqueo'),
   anuncio:      porId('anuncio'),
@@ -63,16 +62,21 @@ function pintarTopeAltura() {
 
 function pintarSeccion(seccion) {
   const suf = SUFIJO[seccion];
-  const { destino, valor, hardware } = panel;
-  pintarRiel(seccion);
+  const { manual, hardware } = panel;
   porId('tarjeta' + suf).classList.toggle('en-movimiento', estaMoviendo(seccion));
   porId('sinActuador' + suf).classList.toggle('d-none', !hardware.conectado || hardware.secciones.includes(seccion));
   if (seccion === 'altura') {
+    pintarRiel(seccion);
     pintarTopeAltura();
     return;
   }
-  porId('val' + suf).textContent = conSigno(valor[seccion]);
-  porId('obj' + suf).textContent = (destino && destino[seccion] !== null) ? conSigno(destino[seccion]) + '°' : '—';
+  /* Cabeza y piernas no tienen sensor: en lugar de grados se dice si esta subiendo o bajando */
+  const dir = manual && manual.seccion === seccion ? manual.dir : 0;
+  const caja = porId('mov' + suf);
+  if (caja.dataset.dir !== String(dir)) {
+    caja.dataset.dir = String(dir);
+    porId('txtMov' + suf).textContent = dir > 0 ? 'Subiendo' : (dir < 0 ? 'Bajando' : 'En reposo');
+  }
 }
 
 function pintarEstado() {
@@ -92,7 +96,6 @@ function pintarEstado() {
 
 function pintarBotones() {
   const { paro, bloqueo, manual, valor } = panel;
-  const habilitado = puedeMover();
   document.querySelectorAll('.btn-mover').forEach((boton) => {
     const seccion = boton.dataset.seccion;
     const dir = parseInt(boton.dataset.dir, 10);
@@ -101,11 +104,6 @@ function pintarBotones() {
     boton.disabled = !puedeMover(seccion) || enLimite;
     boton.classList.toggle('presionado', Boolean(manual && manual.seccion === seccion && manual.dir === dir));
   });
-  SECCIONES_NUMERICAS.forEach((seccion) => {
-    porId('ir' + SUFIJO[seccion]).disabled = !puedeMover(seccion);
-    porId('campo' + SUFIJO[seccion]).disabled = !puedeMover(seccion);
-  });
-  el.btnPlano.disabled = !habilitado;
   /* Bloquear es una accion de quien opera; sin el control no tiene sentido.
      El PARO queda fuera de esta regla a proposito: nunca se deshabilita. */
   el.btnBloqueo.disabled = !control.soyYo || !control.conectado;
@@ -176,23 +174,5 @@ export function anunciar() {
   let altura = '';
   if (valor.altura >= CONFIG.altura.max) altura = ' Altura en el tope superior.';
   else if (valor.altura <= CONFIG.altura.min) altura = ' Altura en el tope inferior.';
-  el.anuncio.textContent = `Cabeza ${valor.cabeza} grados, piernas ${valor.piernas} grados.${altura}`;
-}
-
-/* Rotulos fijos de los rieles: minimo, maximo y referencia */
-export function prepararEscalas() {
-  SECCIONES_NUMERICAS.forEach((seccion) => {
-    const c = CONFIG[seccion];
-    const suf = SUFIJO[seccion];
-    porId('min' + suf).textContent = conSigno(c.min) + '°';
-    porId('max' + suf).textContent = conSigno(c.max) + '°';
-    const referencia = porId('etqCero' + suf);
-    if (c.ref > c.min && c.ref < c.max) {
-      referencia.classList.remove('d-none');
-      referencia.textContent = conSigno(c.ref) + '°';
-      referencia.style.left = ((c.ref - c.min) / (c.max - c.min) * 100) + '%';
-    } else {
-      referencia.classList.add('d-none');
-    }
-  });
+  el.anuncio.textContent = `Movimiento detenido.${altura}`;
 }

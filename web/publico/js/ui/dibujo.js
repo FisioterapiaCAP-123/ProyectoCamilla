@@ -1,11 +1,29 @@
-/* Dibujo SVG de la camilla: inclinacion, arcos de angulo y elevador. */
+/* Dibujo SVG de la camilla.
+
+   Cabeza y piernas no tienen sensor: el dibujo no muestra su posicion real.
+   Mientras se mantiene un boton, la seccion se anima en bucle (como un GIF):
+   al subir va de abajo hacia arriba y vuelve a empezar; al bajar, al reves.
+   La primera pasada arranca desde donde esta el dibujo, sin saltos.
+   Al soltar, termina en el extremo de lo ultimo que se hizo y ahi se queda:
+   si subio, queda arriba; si bajo, queda recta.
+   La altura sigue su estimacion de recorrido, como la barra de su tarjeta. */
 import { CONFIG } from '../config.js';
 import { estaMoviendo, panel } from '../estado.js';
-import { conSigno, porId } from '../utilidades.js';
+import { porId } from '../utilidades.js';
 
 const PIVOTE = { cabeza: { x: 248, y: 240 }, piernas: { x: 392, y: 240 } };
-const R_ARCO = 68;
-const R_ETIQUETA = 93;
+/* Grados que recorre el dibujo en cada bucle: [desde, hasta]. Solo es animacion.
+   La cabeza al bajar pasa un poco de recta, porque ese respaldo puede ir mas abajo */
+const RECORRIDO = {
+  cabeza:  { subir: [0, 35],  bajar: [35, -12] },
+  piernas: { subir: [0, 30],  bajar: [30, 0] }
+};
+const BUCLE_MS = 1700;      // una pasada completa del bucle
+const PAUSA_FINAL = 0.18;   // parte del bucle que se queda quieta al final, antes de reiniciar
+const FINAL_MS = 350;       // al soltar, tiempo para llegar a la posicion final
+/* Donde queda cada seccion al soltar: arriba si subio, recta si bajo */
+const FINAL = { subir: (seccion) => RECORRIDO[seccion].subir[1], bajar: () => 0 };
+
 const AMPLITUD_PX = 32;     // cuanto sube/baja el conjunto en el dibujo, en px
 const SUPERFICIE_Y = 229;   // borde superior del colchon a media altura
 const GROSOR_COLCHON = 22;
@@ -18,36 +36,70 @@ const el = {
   elevador:     porId('elevador'),
   flechaArriba: porId('flechaArriba'),
   flechaAbajo:  porId('flechaAbajo'),
-  segmento:     { cabeza: porId('segCabeza'),     piernas: porId('segPiernas') },
-  arco:         { cabeza: porId('arcoCabeza'),    piernas: porId('arcoPiernas') },
-  etiqueta:     { cabeza: porId('etqArcoCabeza'), piernas: porId('etqArcoPiernas') }
+  segmento:     { cabeza: porId('segCabeza'), piernas: porId('segPiernas') }
 };
 
-function polar(cx, cy, r, grados) {
-  const a = grados * Math.PI / 180;
-  return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+const pose = { cabeza: 0, piernas: 0 };   // grados que se dibujan ahora
+let animacion = null;   // { seccion, dir, partida, inicio } mientras se mantiene un boton
+let cierre = null;      // { seccion, desde, hacia, inicio } al soltar, camino a la posicion final
+let cuadroId = null;
+
+const suave = (t) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);   // ease-in-out
+
+function dibujarSegmentos() {
+  el.segmento.cabeza.setAttribute('transform',  `rotate(${pose.cabeza.toFixed(2)} ${PIVOTE.cabeza.x} ${PIVOTE.cabeza.y})`);
+  el.segmento.piernas.setAttribute('transform', `rotate(${(-pose.piernas).toFixed(2)} ${PIVOTE.piernas.x} ${PIVOTE.piernas.y})`);
 }
 
-function trazarArco(cx, cy, r, a0, a1) {
-  const p0 = polar(cx, cy, r, a0);
-  const p1 = polar(cx, cy, r, a1);
-  return `M ${p0[0].toFixed(2)} ${p0[1].toFixed(2)} A ${r} ${r} 0 0 ${a1 > a0 ? 1 : 0} ${p1[0].toFixed(2)} ${p1[1].toFixed(2)}`;
-}
-
-function pintarArco(seccion, grados, aBase, sentido) {
-  const p = PIVOTE[seccion];
-  const arco = el.arco[seccion];
-  const etiqueta = el.etiqueta[seccion];
-  if (grados === 0) {
-    arco.setAttribute('d', '');
-    etiqueta.textContent = '';
-    return;
+function cuadro(ahora) {
+  cuadroId = null;
+  if (animacion) {
+    const { seccion, dir, partida, inicio } = animacion;
+    const [desde, hasta] = RECORRIDO[seccion][dir > 0 ? 'subir' : 'bajar'];
+    const recorrido = BUCLE_MS * (1 - PAUSA_FINAL);
+    const pausa = BUCLE_MS * PAUSA_FINAL;
+    // La primera pasada sale de donde estaba el dibujo y dura lo que le falta del recorrido
+    const primera = desde === hasta ? 0 : recorrido * Math.min(1, Math.abs(hasta - partida) / Math.abs(hasta - desde));
+    const pasado = ahora - inicio;
+    if (pasado < primera + pausa) {
+      const t = primera ? Math.min(1, pasado / primera) : 1;
+      pose[seccion] = partida + (hasta - partida) * suave(t);
+    } else {
+      const t = Math.min(1, ((pasado - primera - pausa) % BUCLE_MS) / recorrido);
+      pose[seccion] = desde + (hasta - desde) * suave(t);
+    }
   }
-  arco.setAttribute('d', trazarArco(p.x, p.y, R_ARCO, aBase, aBase + sentido * grados));
-  const medio = polar(p.x, p.y, R_ETIQUETA, aBase + sentido * grados / 2);
-  etiqueta.setAttribute('x', medio[0].toFixed(1));
-  etiqueta.setAttribute('y', medio[1].toFixed(1));
-  etiqueta.textContent = conSigno(grados) + '°';
+  if (cierre) {   // puede seguir mientras otra seccion se anima
+    const t = Math.min(1, (ahora - cierre.inicio) / FINAL_MS);
+    pose[cierre.seccion] = cierre.desde + (cierre.hacia - cierre.desde) * suave(t);
+    if (t >= 1) cierre = null;
+  }
+  dibujarSegmentos();
+  if (animacion || cierre) cuadroId = requestAnimationFrame(cuadro);
+}
+
+function seguirAnimando() {
+  if (cuadroId === null) cuadroId = requestAnimationFrame(cuadro);
+}
+
+/* Arranca, cambia o termina el bucle segun el boton que se mantiene */
+function actualizarAnimacion() {
+  const { manual } = panel;
+  const quiere = manual && RECORRIDO[manual.seccion] ? { seccion: manual.seccion, dir: manual.dir } : null;
+  if (quiere && animacion && animacion.seccion === quiere.seccion && animacion.dir === quiere.dir) return;
+  if (animacion) {
+    // La seccion que se soltaba (o que se deja por otra) va a su posicion final
+    const { seccion, dir } = animacion;
+    const hacia = FINAL[dir > 0 ? 'subir' : 'bajar'](seccion);
+    if (quiere && quiere.seccion !== seccion) pose[seccion] = hacia;   // cambio directo: sin animar las dos
+    else cierre = { seccion, desde: pose[seccion], hacia, inicio: performance.now() };
+    animacion = null;
+  }
+  if (quiere) {
+    if (cierre && cierre.seccion === quiere.seccion) cierre = null;
+    animacion = { ...quiere, partida: pose[quiere.seccion], inicio: performance.now() };
+  }
+  seguirAnimando();
 }
 
 function pintarElevador() {
@@ -69,13 +121,8 @@ function pintarElevador() {
 }
 
 export function pintarDibujo() {
-  const { valor } = panel;
-  el.segmento.cabeza.setAttribute('transform',  `rotate(${valor.cabeza} ${PIVOTE.cabeza.x} ${PIVOTE.cabeza.y})`);
-  el.segmento.piernas.setAttribute('transform', `rotate(${-valor.piernas} ${PIVOTE.piernas.x} ${PIVOTE.piernas.y})`);
   el.segmento.cabeza.classList.toggle('activo',  estaMoviendo('cabeza'));
   el.segmento.piernas.classList.toggle('activo', estaMoviendo('piernas'));
-
-  pintarArco('cabeza',  valor.cabeza,  180,  1);
-  pintarArco('piernas', valor.piernas,   0, -1);
+  actualizarAnimacion();
   pintarElevador();
 }

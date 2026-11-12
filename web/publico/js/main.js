@@ -4,7 +4,7 @@ import { iniciarMandos } from './camilla/mandos.js';
 import { exponerApi } from './camilla/telemetria.js';
 import { caidaDeConexion, reconectado, recibir } from './recepcion.js';
 import { iniciarModales } from './ui/modales.js';
-import { pintar, prepararEscalas } from './ui/pintado.js';
+import { pintar } from './ui/pintado.js';
 import { iniciarDiagnostico, registrar } from './ui/registro.js';
 import { porId } from './utilidades.js';
 import { iniciarAcceso } from './vistas/acceso.js';
@@ -30,7 +30,6 @@ porId('btnReintentar').addEventListener('click', () => {
   consultar();
 });
 
-prepararEscalas();
 registrar('PANEL INICIADO');
 pintar();
 iniciarSondeo({ alRecibir: recibir, alCaer: caidaDeConexion, alRecuperar: reconectado });

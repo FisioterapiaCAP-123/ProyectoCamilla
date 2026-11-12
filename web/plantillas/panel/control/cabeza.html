@@ -8,25 +8,9 @@
     </div>
     <div class="card-body d-flex flex-column gap-3">
 
-      <div class="d-flex align-items-end justify-content-between gap-3">
-        <div class="cifra"><span id="valCabeza">0</span><span class="unidad">&deg;</span></div>
-        <div class="text-end small fw-semibold lh-sm text-body-secondary">
-          Destino
-          <b class="d-block tipo-dato dato-destino" id="objCabeza">&mdash;</b>
-        </div>
-      </div>
-
-      <div>
-        <div class="riel-pista">
-          <div class="riel-cero" id="ceroCabeza"></div>
-          <div class="riel-relleno" id="rellenoCabeza"></div>
-          <div class="riel-aguja" id="agujaCabeza"></div>
-        </div>
-        <div class="riel-escala tipo-dato mt-1 text-body-secondary">
-          <span class="riel-min" id="minCabeza"></span>
-          <span class="riel-ref" id="etqCeroCabeza">0&deg;</span>
-          <span class="riel-max" id="maxCabeza"></span>
-        </div>
+      <div class="estado-seccion" id="movCabeza" data-dir="0" role="status" aria-live="polite">
+        <span class="estado-seccion-icono" aria-hidden="true"><svg class="flecha-sube" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V6"/><path d="m5 12 7-7 7 7"/></svg><svg class="flecha-baja" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v13"/><path d="m19 12-7 7-7-7"/></svg></span>
+        <span class="estado-seccion-texto" id="txtMovCabeza">En reposo</span>
       </div>
 
       <div class="d-grid gap-2">
@@ -35,31 +19,18 @@
             <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V6"/><path d="m5 12 7-7 7 7"/></svg>
           </span>
           <span class="rotulo text-uppercase">Subir</span>
-          <span class="badge paso tipo-dato ms-auto">+1&deg;</span>
         </button>
         <button type="button" class="btn btn-mover d-flex align-items-center gap-3" data-seccion="cabeza" data-dir="-1">
           <span class="icono" aria-hidden="true">
             <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v13"/><path d="m19 12-7 7-7-7"/></svg>
           </span>
           <span class="rotulo text-uppercase">Bajar</span>
-          <span class="badge paso tipo-dato ms-auto">&minus;1&deg;</span>
         </button>
       </div>
 
       <p class="small text-center mb-0 text-body-secondary">
-        Un toque = 1&deg;. Mantener pulsado = movimiento continuo.
+        Mantén pulsado para mover. Al soltar, se detiene.
       </p>
-
-      <div class="bg-body-tertiary border rounded-3 p-2">
-        <label for="campoCabeza" class="form-label tipo-titulo text-uppercase fw-semibold mb-1 rotulo-campo-compacto">Ir a</label>
-        <div class="input-group has-validation">
-          <input type="number" class="form-control tipo-dato text-center fw-semibold campo-angulo" id="campoCabeza"
-                 inputmode="numeric" step="1" autocomplete="off">
-          <span class="input-group-text tipo-dato">&deg;</span>
-          <button class="btn btn-acento tipo-titulo text-uppercase fw-semibold px-3 btn-ir" type="button" id="irCabeza">Ir</button>
-          <div class="invalid-feedback" id="avisoCabeza"></div>
-        </div>
-      </div>
 
     </div>
   </section>

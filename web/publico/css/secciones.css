@@ -7,16 +7,20 @@
 .seccion.en-movimiento{box-shadow:0 0 0 3px var(--acento)!important}
 .titulo-tarjeta{font-size:1.3rem}
 
-/* Numero grande de la lectura */
-.cifra{
-  font-family:var(--bs-font-monospace);font-weight:600;
-  font-size:clamp(2.9rem,12vw,4.1rem);line-height:.85;
-  letter-spacing:-.03em;color:var(--acento-txt);
-  font-variant-numeric:tabular-nums;
+
+/* Cabeza y piernas no tienen sensor: en lugar de grados, un estado grande que dice si sube o baja */
+.estado-seccion{
+  display:flex;align-items:center;gap:.5rem;min-height:3.6rem;
+  font-family:var(--titulo);font-weight:600;font-size:clamp(2.1rem,8vw,2.8rem);line-height:1;
+  text-transform:uppercase;letter-spacing:.05em;color:var(--bs-secondary-color);
 }
-.cifra .unidad{font-size:.4em;margin-left:.08em;letter-spacing:0}
-.dato-destino{font-size:1.05rem}
-.campo-angulo{font-size:1.15rem}
+.estado-seccion:not([data-dir="0"]){color:var(--acento-txt)}
+.estado-seccion-icono{display:none;font-size:.85em;line-height:0}
+.estado-seccion-icono svg{display:none}
+.estado-seccion[data-dir="1"] .flecha-sube,.estado-seccion[data-dir="-1"] .flecha-baja{display:block}
+.estado-seccion:not([data-dir="0"]) .estado-seccion-icono{display:inline-block;animation:empujar .8s ease-in-out infinite}
+.estado-seccion[data-dir="-1"] .estado-seccion-icono{animation-direction:reverse}
+@keyframes empujar{0%,100%{transform:translateY(.12em)}50%{transform:translateY(-.12em)}}
 
 /* Riel de recorrido. No usa .progress de Bootstrap porque el relleno
    crece desde el cero, que puede estar en medio de la escala. */

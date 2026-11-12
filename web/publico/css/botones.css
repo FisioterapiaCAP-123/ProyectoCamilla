@@ -26,7 +26,6 @@
   background:var(--acento-suave);color:var(--acento-txt);
 }
 .btn-mover .rotulo{font-family:var(--titulo);font-size:1.4rem;font-weight:600;letter-spacing:.05em}
-.btn-mover .paso{background:var(--acento-suave)!important;color:var(--acento-txt)!important}
 /* Mientras se mantiene pulsado reusamos el estado activo de Bootstrap */
 .btn-mover.presionado{
   color:var(--bs-btn-active-color);
@@ -35,7 +34,6 @@
   transform:scale(.985);
 }
 .btn-mover.presionado .icono,
-.btn-mover.presionado .paso{background:rgba(255,255,255,.25)!important;color:#fff!important}
 @media (max-width:540px){ .btn-mover .ayuda{display:none} }
 
 /* Boton de accion tenido del acento de la seccion */
@@ -50,14 +48,12 @@
   --bs-btn-active-bg:var(--acento);
   --bs-btn-active-border-color:var(--acento);
 }
-.btn-ir{font-size:1.15rem;letter-spacing:.06em}
 
 /* Botones grandes: faciles de pulsar en un celular o una tablet */
 .btn-accion{min-height:58px;font-size:1.3rem;letter-spacing:.06em}
 .btn-accion-sec{font-size:1.2rem;border-width:2px}
 .btn-decision{font-size:1.35rem;border-width:2px}
 .btn-entrar{font-size:1.4rem;letter-spacing:.08em}
-.btn-plano{font-size:1.25rem;letter-spacing:.07em;border-width:2px}
 .btn-paro{font-size:1.4rem;letter-spacing:.09em;border-width:2px;min-width:180px}
 
 /* Botones de los formularios y de la barra de control */
