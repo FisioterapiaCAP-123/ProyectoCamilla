@@ -296,7 +296,7 @@ def administrar(ruta, datos, admin):
         id_paciente = datos.get("id")
         if id_paciente is not None and not es_id(id_paciente):
             return {"ok": False, "mensaje": "Petición inválida."}
-        guardado, error = basedatos.guardar_paciente(id_paciente, datos.get("nombre"), datos.get("edad"), admin["usuario"])
+        guardado, error = basedatos.guardar_paciente(id_paciente, datos, admin["usuario"])
         if error:
             return {"ok": False, "campo": error[0], "mensaje": error[1]}
         # en el registro del sistema no van datos del paciente, solo el numero

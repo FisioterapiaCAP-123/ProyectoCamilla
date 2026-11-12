@@ -2,9 +2,12 @@
 import { llamar } from './cliente.js';
 
 export const ADMIN = {
-  // POST /api/pacientes/lista            -> {ok, pacientes:[{id, nombre, edad, creado, creado_por}]}
+  // POST /api/pacientes/lista            -> {ok, pacientes:[{id, ...campos, creado, creado_por}]}
+  //   campos (todos opcionales, null si vacio): nombres, apellidos, sexo, nacimiento, dpi, carne, telefono,
+  //   correo, emergencia_nombre, emergencia_telefono, estatura (m), peso (lb), fisioterapeuta, diagnostico,
+  //   dolor (0-10), proxima_cita ("AAAA-MM-DD HH:MM", 24 h), notas
   pacientes() { return llamar('/api/pacientes/lista'); },
-  // POST /api/pacientes/guardar {id|null, nombre, edad}   id null = registro nuevo
+  // POST /api/pacientes/guardar {id|null, ...campos}   id null = registro nuevo
   guardarPaciente(paciente) { return llamar('/api/pacientes/guardar', paciente); },
   // POST /api/pacientes/borrar {id}
   borrarPaciente(id) { return llamar('/api/pacientes/borrar', { id }); },

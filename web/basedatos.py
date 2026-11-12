@@ -22,13 +22,26 @@ import sqlite3
 import sys
 import time
 from contextlib import closing
+from datetime import date, datetime
 from pathlib import Path
 
 ARCHIVO = Path(__file__).parent / "camilla.db"
 VUELTAS = 300_000  # PBKDF2: ~0.4 s en la Raspberry, frena a quien intente adivinar
 ROLES = {"admin": "Administrador", "fisio": "Fisioterapeuta"}
 CLAVE_MINIMA = 6
-EDAD_MAXIMA = 120
+EDAD_MAXIMA = 120  # anos: limita la fecha de nacimiento
+
+# Reglas de los campos del paciente. Iguales en vistas/pacientes.js
+TEXTOS = {"nombres": 60, "apellidos": 60, "carne": 20, "correo": 100,
+          "emergencia_nombre": 80, "fisioterapeuta": 80}  # largo maximo
+PARRAFOS = {"diagnostico": 1000, "notas": 2000}  # respetan los saltos de linea
+TELEFONOS = ("telefono", "emergencia_telefono")  # 8 numeros de Guatemala
+SEXOS = {"F": "Femenino", "M": "Masculino"}
+MEDIDAS = {  # (minimo, maximo, decimales, aviso)
+    "estatura": (0.3, 2.5, 2, "La estatura va de 0.30 a 2.50 m."),
+    "peso": (1, 900, 1, "El peso va de 1 a 900 lb."),
+    "dolor": (0, 10, 0, "El dolor es un número entero de 0 a 10."),  # escala EVA: 0 = sin dolor
+}
 
 TABLAS = """
 CREATE TABLE IF NOT EXISTS usuarios (
@@ -41,14 +54,36 @@ CREATE TABLE IF NOT EXISTS usuarios (
     clave   TEXT NOT NULL,
     creado  TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS pacientes (
-    id         INTEGER PRIMARY KEY,
-    nombre     TEXT NOT NULL,
-    edad       INTEGER NOT NULL,
-    creado     TEXT NOT NULL,
-    creado_por TEXT NOT NULL
-);
 """
+# Todos los campos del paciente son opcionales (vacio = NULL)
+TABLA_PACIENTES = """
+CREATE TABLE IF NOT EXISTS pacientes (
+    id                  INTEGER PRIMARY KEY,
+    nombres             TEXT,
+    apellidos           TEXT,
+    sexo                TEXT,     -- F o M
+    nacimiento          TEXT,     -- AAAA-MM-DD
+    dpi                 TEXT,     -- 13 numeros
+    carne               TEXT,
+    telefono            TEXT,     -- 8 numeros
+    correo              TEXT,
+    emergencia_nombre   TEXT,
+    emergencia_telefono TEXT,
+    estatura            REAL,     -- metros
+    peso                REAL,     -- libras
+    fisioterapeuta      TEXT,
+    diagnostico         TEXT,
+    dolor               INTEGER,  -- 0 a 10
+    proxima_cita        TEXT,     -- AAAA-MM-DD HH:MM (24 h)
+    notas               TEXT,
+    creado              TEXT NOT NULL,
+    creado_por          TEXT NOT NULL
+)"""
+TABLAS += TABLA_PACIENTES + ";"
+# Columnas que llena el formulario. Nombres fijos: nunca vienen del usuario
+CAMPOS_PACIENTE = ("nombres", "apellidos", "sexo", "nacimiento", "dpi", "carne", "telefono", "correo",
+                   "emergencia_nombre", "emergencia_telefono", "estatura", "peso", "fisioterapeuta",
+                   "diagnostico", "dolor", "proxima_cita", "notas")
 
 
 def abrir():
@@ -62,6 +97,33 @@ def iniciar():
     ARCHIVO.touch(mode=0o600, exist_ok=True)
     with closing(abrir()) as con, con:
         con.executescript(TABLAS)
+    with closing(abrir()) as con:
+        migrar_pacientes(con)
+
+
+def migrar_pacientes(con):
+    """Bases de antes del 12-11: pacientes tenia solo nombre y edad, obligatorios.
+    Se rehace la tabla con los campos nuevos: el nombre se parte en nombres y apellidos
+    (se corrige al editar) y la edad pasa a las notas para no perderla."""
+    if "edad" not in {c["name"] for c in con.execute("PRAGMA table_info(pacientes)")}:
+        return
+    viejos = con.execute("SELECT * FROM pacientes").fetchall()
+    con.execute("BEGIN")  # todo o nada
+    con.execute(TABLA_PACIENTES.replace("IF NOT EXISTS pacientes", "pacientes_nueva"))
+    for f in viejos:
+        con.execute("INSERT INTO pacientes_nueva (id, nombres, apellidos, notas, creado, creado_por) VALUES (?, ?, ?, ?, ?, ?)",
+                    (f["id"], *partir_nombre(f["nombre"]), f"Edad al registrarlo: {f['edad']} años",
+                     f["creado"], f["creado_por"]))
+    con.execute("DROP TABLE pacientes")
+    con.execute("ALTER TABLE pacientes_nueva RENAME TO pacientes")
+    con.commit()
+
+
+def partir_nombre(completo):
+    """'Maria Jose Lopez Garcia' -> ('Maria Jose', 'Lopez Garcia'). Con 2 o 3 palabras solo la primera es nombre."""
+    palabras = limpiar(completo, 120).split()
+    corte = 2 if len(palabras) >= 4 else 1
+    return " ".join(palabras[:corte]) or None, " ".join(palabras[corte:]) or None
 
 
 def ahora():
@@ -75,6 +137,19 @@ def cifrar(clave, sal):
 def limpiar(texto, largo):
     """Sin espacios de mas y con un largo maximo."""
     return " ".join(str(texto or "").split())[:largo]
+
+
+def limpiar_parrafos(texto, largo):
+    """Como limpiar, pero respeta los saltos de linea (a lo mas una linea en blanco seguida)."""
+    lineas = (" ".join(linea.split()) for linea in str(texto or "").splitlines())
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lineas)).strip()[:largo]
+
+
+def leer_fecha(texto, formato):
+    try:
+        return datetime.strptime(texto, formato)
+    except ValueError:
+        return None
 
 
 def publico(fila):
@@ -169,19 +244,72 @@ def pacientes():
         return [dict(f) for f in con.execute("SELECT * FROM pacientes ORDER BY id DESC")]
 
 
-def guardar_paciente(id_paciente, nombre, edad, quien):
+def revisar_paciente(datos):
+    """Los campos del paciente ya limpios. Todos son opcionales: lo vacio queda None.
+    Devuelve (campos, None) o (None, (campo, mensaje)). Reglas iguales en vistas/pacientes.js."""
+    campos = {c: limpiar(datos.get(c), largo) for c, largo in TEXTOS.items()}
+    campos.update({c: limpiar_parrafos(datos.get(c), largo) for c, largo in PARRAFOS.items()})
+    campos["sexo"] = str(datos.get("sexo") or "")
+    campos["dpi"] = re.sub(r"[\s-]", "", str(datos.get("dpi") or ""))
+    campos["nacimiento"] = str(datos.get("nacimiento") or "").strip()
+    campos["proxima_cita"] = str(datos.get("proxima_cita") or "").strip().replace("T", " ")
+    campos["correo"] = campos["correo"].lower()
+
+    if campos["sexo"] and campos["sexo"] not in SEXOS:
+        return None, ("sexo", "Elige femenino o masculino.")
+    if campos["dpi"] and not re.fullmatch(r"\d{13}", campos["dpi"]):
+        return None, ("dpi", "El DPI tiene 13 números.")
+    for campo in TELEFONOS:
+        numero = re.sub(r"[\s-]", "", str(datos.get(campo) or ""))  # la pagina lo manda como 5555 1234
+        if numero and not re.fullmatch(r"\d{8}", numero):
+            return None, (campo, "El teléfono tiene 8 números.")
+        campos[campo] = numero
+    if campos["correo"] and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", campos["correo"]):
+        return None, ("correo", "Ese correo no es válido.")
+    if campos["nacimiento"]:
+        nacio = leer_fecha(campos["nacimiento"], "%Y-%m-%d")
+        hoy = date.today()
+        if nacio is None:
+            return None, ("nacimiento", "Esa fecha no es válida.")
+        if nacio.date() > hoy:
+            return None, ("nacimiento", "La fecha de nacimiento no puede ser futura.")
+        if nacio.year < hoy.year - EDAD_MAXIMA:
+            return None, ("nacimiento", f"La fecha de nacimiento es de hace más de {EDAD_MAXIMA} años.")
+        campos["nacimiento"] = nacio.strftime("%Y-%m-%d")
+    if campos["proxima_cita"]:
+        cita = leer_fecha(campos["proxima_cita"], "%Y-%m-%d %H:%M")
+        if cita is None:
+            return None, ("proxima_cita", "Esa fecha y hora no son válidas.")
+        campos["proxima_cita"] = cita.strftime("%Y-%m-%d %H:%M")
+    for campo, (minimo, maximo, decimales, aviso) in MEDIDAS.items():
+        valor = datos.get(campo)
+        if valor is None or valor == "":
+            campos[campo] = None
+            continue
+        if (isinstance(valor, bool) or not isinstance(valor, (int, float)) or not minimo <= valor <= maximo
+                or (decimales == 0 and valor != int(valor))):
+            return None, (campo, aviso)
+        campos[campo] = round(valor, decimales) if decimales else int(valor)
+    campos = {c: (v if v != "" else None) for c, v in campos.items()}
+    if all(v is None for v in campos.values()):
+        return None, (None, "Llena al menos un campo.")
+    return campos, None
+
+
+def guardar_paciente(id_paciente, datos, quien):
     """Nuevo (id None) o editado. Devuelve (id, None) o (None, (campo, mensaje))."""
-    nombre = limpiar(nombre, 80)
-    if len(nombre) < 2:
-        return None, ("nombre", "Escribe el nombre del paciente.")
-    if isinstance(edad, bool) or not isinstance(edad, int) or not 0 <= edad <= EDAD_MAXIMA:
-        return None, ("edad", f"La edad debe ser un número entre 0 y {EDAD_MAXIMA}.")
+    campos, error = revisar_paciente(datos)
+    if error:
+        return None, error
+    valores = [campos[c] for c in CAMPOS_PACIENTE]
     with closing(abrir()) as con, con:
         if id_paciente is None:
-            return con.execute("INSERT INTO pacientes (nombre, edad, creado, creado_por) VALUES (?, ?, ?, ?)",
-                               (nombre, edad, ahora(), quien)).lastrowid, None
-        if con.execute("UPDATE pacientes SET nombre = ?, edad = ? WHERE id = ?",
-                       (nombre, edad, id_paciente)).rowcount == 1:
+            columnas = ", ".join((*CAMPOS_PACIENTE, "creado", "creado_por"))
+            marcas = ", ".join("?" * (len(CAMPOS_PACIENTE) + 2))
+            return con.execute(f"INSERT INTO pacientes ({columnas}) VALUES ({marcas})",
+                               (*valores, ahora(), quien)).lastrowid, None
+        cambios = ", ".join(f"{c} = ?" for c in CAMPOS_PACIENTE)
+        if con.execute(f"UPDATE pacientes SET {cambios} WHERE id = ?", (*valores, id_paciente)).rowcount == 1:
             return id_paciente, None
     return None, (None, "Ese registro ya no existe.")
 

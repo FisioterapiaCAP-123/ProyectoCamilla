@@ -15,6 +15,24 @@
 
 .titulo-admin{font-size:1.5rem;font-weight:600}
 .cuenta-registros{font-size:.8rem}
-.buscador-admin{max-width:260px}
-.campo-edad{max-width:220px}
+.buscador-admin{width:310px;max-width:100%}
+.buscador-admin .form-control{padding-left:2.5rem}
+/* Lupa dentro del buscador: no recibe clics, el input sigue tomando el foco */
+.lupa-buscador{position:absolute;left:.85rem;top:50%;transform:translateY(-50%);color:var(--bs-secondary-color);pointer-events:none}
+.campo-corto{max-width:220px}   /* numeros cortos: dolor */
+/* Hora de la cita: tres listas en una fila, con menos relleno para que quepan en el celular */
+.hora-cita .form-select{padding-left:.75rem;padding-right:2.25rem;background-position:right .6rem center}
 .tarjeta-paciente{border-top:4px solid var(--altura)!important}
+
+/* Formulario de paciente en panel lateral: angosto en escritorio, pantalla completa en el celular */
+.panel-paciente{--bs-offcanvas-width:min(600px,100vw)}
+.panel-paciente .offcanvas-body{padding-bottom:110px}   /* que el paro flotante no tape los botones */
+.tabla-pacientes tbody tr{cursor:pointer}
+.nombre-paciente{color:var(--bs-body-color);text-decoration:none;font-size:inherit}
+.nombre-paciente:hover,.nombre-paciente:focus-visible{color:var(--bs-primary);text-decoration:underline}
+.texto-parrafos{white-space:pre-line}   /* diagnostico y notas respetan sus saltos de linea */
+@media (max-width:575.98px){
+  .ficha-pie{padding-bottom:96px!important}   /* ficha a pantalla completa: el paro no tapa los botones */
+  .btn-nuevo-paciente{flex:1 1 100%;justify-content:center}
+  .buscador-admin{max-width:none;flex:1 1 100%}
+}

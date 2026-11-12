@@ -104,7 +104,7 @@ export function iniciarMandos() {
 
   document.addEventListener('keydown', (e) => {
     // En los formularios del administrador ESC solo cierra o borra; ahi no se esta moviendo nada
-    if (e.target.closest && e.target.closest('.pestana-admin, #modalClave, #modalConfirmar')) return;
+    if (e.target.closest && e.target.closest('.pestana-admin, #panelPaciente, #modalFicha, #modalClave, #modalConfirmar')) return;
     if (e.key === 'Escape' && !panel.paro) activarParo();
   });
 }

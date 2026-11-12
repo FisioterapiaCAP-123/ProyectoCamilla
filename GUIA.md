@@ -92,6 +92,7 @@ Funciones disponibles:
     ├── servidor.py             Servidor web y reglas del control
     ├── paginas.py              Compone el HTML y entrega los archivos públicos
     ├── basedatos.py            Perfiles, pacientes y comandos de terminal
+    ├── datos_prueba.py         Pacientes inventados para probar
     ├── camilla.db              Base de datos; se crea sola y no se sube a git
     ├── plantillas/             HTML del panel, separado en parciales
     │   ├── index.html          Esqueleto de la página
@@ -218,6 +219,8 @@ Los comandos de `basedatos.py` se ejecutan desde la carpeta del proyecto.
 | Listar los perfiles y su rol | `python3 web/basedatos.py` |
 | Hacer administrador a un perfil (también lo reactiva) | `python3 web/basedatos.py admin USUARIO` |
 | Poner una contraseña nueva a un perfil | `python3 web/basedatos.py clave USUARIO` |
+| Agregar 20 pacientes inventados para probar | `python3 web/datos_prueba.py` |
+| Borrar solo los pacientes de prueba | `python3 web/datos_prueba.py borrar` |
 | Comprobar si la página está encendida | `ss -ltn 'sport = :8000'` (aparece `LISTEN` si lo está) |
 | Ver los mensajes de la página en vivo, con la red encendida | `journalctl -t python3 -f` |
 | Ver la clave del WiFi | `sudo grep wpa_passphrase /etc/hostapd/camilla.conf` |
@@ -302,8 +305,12 @@ El control pertenece a una persona (su perfil), no a un dispositivo. Quien lo ti
 
 ### 7.7 Registros de pacientes
 
-- Cada registro tiene **paciente** (nombre, hasta 80 caracteres) y **edad** (de 0 a 120). También se guardan la fecha y el usuario que lo agregó.
-- En la pestaña **Registros** el administrador agrega, busca, edita y borra. Borrar pide confirmación.
+- Cada registro tiene **datos personales** (nombres, apellidos, sexo, fecha de nacimiento, DPI de 13 números y carné), **contacto** (teléfono de 8 números, correo, contacto de emergencia y su teléfono), **medidas** (estatura en metros y peso en libras) y **atención** (fisioterapeuta responsable, diagnóstico, dolor de 0 a 10 en la escala EVA, próxima cita y notas). Todos son opcionales, pero hay que llenar al menos uno. También se guardan la fecha y el usuario que lo agregó.
+- La tabla ordena por apellido y muestra "Apellidos, Nombres", DPI y carné, la edad calculada con la fecha de nacimiento, el teléfono y la próxima cita con AM y PM. Una cita que ya pasó sale en gris. El buscador busca por nombre, DPI, carné o teléfono. Los demás datos se ven al editar.
+- El campo de fisioterapeuta sugiere los perfiles activos, pero acepta cualquier nombre.
+- En la pestaña **Registros** la tabla ocupa todo el ancho. Tocar un paciente abre su **ficha** de solo lectura, con un botón para editarla.
+- **Nuevo registro** y el lápiz abren el formulario en un panel que sale por la derecha (a pantalla completa en el celular). Si se cierra con cambios sin guardar, pregunta **¿Descartar cambios?**. Borrar pide confirmación.
+- En el panel y la ficha la tecla Esc no activa el paro, igual que en los demás formularios del administrador. El botón de paro flotante sigue visible encima.
 
 ### 7.8 Pérdida de conexión
 

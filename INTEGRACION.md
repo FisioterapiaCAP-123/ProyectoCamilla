@@ -190,18 +190,18 @@ Rol administrador.
 
 | Ruta | Cuerpo | Respuesta correcta |
 |---|---|---|
-| `/api/pacientes/lista` | `{}` | `{"ok": true, "pacientes": [{id, nombre, edad, creado, creado_por}]}`, del más reciente al más antiguo |
-| `/api/pacientes/guardar` | `{id, nombre, edad}`; `id: null` crea uno nuevo | `{"ok": true, "id": n}` |
+| `/api/pacientes/lista` | `{}` | `{"ok": true, "pacientes": [{id, nombres, apellidos, sexo, nacimiento, dpi, carne, telefono, correo, emergencia_nombre, emergencia_telefono, estatura, peso, fisioterapeuta, diagnostico, dolor, proxima_cita, notas, creado, creado_por}]}`, del más reciente al más antiguo. Un campo vacío llega como `null` |
+| `/api/pacientes/guardar` | `{id, ...campos}`; `id: null` crea uno nuevo. Todos los campos son opcionales | `{"ok": true, "id": n}` |
 | `/api/pacientes/borrar` | `{id}` | `{"ok": true}` |
 
 | Caso | Respuesta con `ok: false` |
 |---|---|
 | `id` no entero al guardar | `mensaje`: `Petición inválida.` |
-| Nombre con menos de 2 caracteres | `campo: "nombre"`, `mensaje`: `Escribe el nombre del paciente.` |
-| Edad inválida | `campo: "edad"`, `mensaje`: `La edad debe ser un número entre 0 y 120.` |
+| Todos los campos vacíos | `campo: null`, `mensaje`: `Llena al menos un campo.` |
+| Un campo no cumple su regla | `campo`: el nombre del campo, `mensaje`: el motivo. Las reglas están en [Validación](#validación) |
 | El registro no existe | `mensaje`: `Ese registro ya no existe.` |
 
-El nombre se normaliza quitando espacios repetidos y se corta a 80 caracteres. Editar un registro no cambia `creado` ni `creado_por`.
+Los textos se normalizan quitando espacios repetidos. Guardar reemplaza todos los campos: un campo que no se envía queda vacío. Editar un registro no cambia `creado` ni `creado_por`.
 
 ### 3.9 Perfiles de usuario
 
@@ -304,7 +304,9 @@ Ana (pide)                       Servidor                     Antonio (titular)
 | `VUELTAS` | `300_000` | Iteraciones de PBKDF2 |
 | `ROLES` | `admin`, `fisio` | Roles válidos |
 | `CLAVE_MINIMA` | `6` | Largo mínimo de la contraseña |
-| `EDAD_MAXIMA` | `120` | Edad máxima de un paciente |
+| `EDAD_MAXIMA` | `120` | Antigüedad máxima de la fecha de nacimiento, en años |
+| `TEXTOS`, `PARRAFOS` | Largo máximo de cada texto | Repetido en `maxlength` de `panel/registros.html` |
+| `MEDIDAS` | estatura 0.30 a 2.50 m, peso 1 a 900 lb, dolor 0 a 10 | Rango, decimales y aviso de los números del paciente. Repetido en `vistas/pacientes.js` |
 
 **Página (`web/publico/js/config.js`)**
 
@@ -371,16 +373,34 @@ CREATE TABLE IF NOT EXISTS usuarios (
     creado  TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS pacientes (
-    id         INTEGER PRIMARY KEY,
-    nombre     TEXT NOT NULL,
-    edad       INTEGER NOT NULL,
-    creado     TEXT NOT NULL,
-    creado_por TEXT NOT NULL
+    id                  INTEGER PRIMARY KEY,
+    nombres             TEXT,
+    apellidos           TEXT,
+    sexo                TEXT,     -- F o M
+    nacimiento          TEXT,     -- AAAA-MM-DD
+    dpi                 TEXT,     -- 13 dígitos, sin espacios
+    carne               TEXT,
+    telefono            TEXT,     -- 8 dígitos, sin espacios
+    correo              TEXT,
+    emergencia_nombre   TEXT,
+    emergencia_telefono TEXT,
+    estatura            REAL,     -- metros
+    peso                REAL,     -- libras
+    fisioterapeuta      TEXT,
+    diagnostico         TEXT,
+    dolor               INTEGER,  -- 0 a 10 (escala EVA)
+    proxima_cita        TEXT,     -- AAAA-MM-DD HH:MM, en 24 horas
+    notas               TEXT,
+    creado              TEXT NOT NULL,
+    creado_por          TEXT NOT NULL
 );
 ```
 
 - `creado` usa el formato `AAAA-MM-DD HH:MM` y la hora del sistema.
 - `creado_por` guarda el usuario como texto, sin relación con la tabla `usuarios`.
+- Los campos del paciente son todos opcionales: vacío es `NULL`.
+- Una base creada antes del 12-11 tenía `pacientes` con solo `nombre` y `edad`. `migrar_pacientes` la rehace sola al arrancar el servidor: parte el nombre en `nombres` y `apellidos` (con 4 palabras o más, las dos primeras son nombres; si no, solo la primera) y pasa la edad a `notas` (`Edad al registrarlo: N años`).
+- La página guarda la hora en 24 horas y la muestra con AM y PM. La pide con tres listas (hora de 1 a 12, minutos de 5 en 5, AM o PM).
 
 **Contraseñas.** `clave` guarda en hexadecimal el resultado de PBKDF2-HMAC-SHA256 con 300 000 iteraciones. `sal` son 16 bytes aleatorios por perfil. La comparación usa `hmac.compare_digest`. Si el usuario no existe se hace el mismo cálculo, para que el tiempo de respuesta no revele si existe.
 
@@ -393,8 +413,20 @@ Las reglas de perfiles están en `web/basedatos.py` y repetidas en `web/publico/
 | `nombre` del perfil | 2 a 40 letras sin tildes | `[A-Za-z]{2,40}` |
 | `usuario` | 3 a 20 letras o números, guardado en minúsculas | `[a-z0-9]{3,20}` |
 | `clave` | 6 a 100 letras o números | `[A-Za-z0-9]*`, largo de 6 a 100 |
-| `nombre` del paciente | Mínimo 2 caracteres, cortado a 80 | Texto libre |
-| `edad` | Entero de 0 a 120 | No acepta texto ni booleanos |
+| Campos del paciente | Todos opcionales, pero al menos uno lleno | Las reglas de abajo se aplican solo si el campo trae algo |
+| `nombres`, `apellidos` | Texto libre, cortado a 60 | |
+| `emergencia_nombre`, `fisioterapeuta` | Texto libre, cortado a 80 | |
+| `sexo` | `F` o `M` | |
+| `nacimiento` | Fecha real, no futura, de hace 120 años o menos | `AAAA-MM-DD` |
+| `dpi` | 13 dígitos; se aceptan espacios y guiones al escribirlo | `\d{13}` |
+| `carne` | Texto libre, cortado a 20 | |
+| `telefono`, `emergencia_telefono` | 8 dígitos; la página pone el espacio (`5555 1234`) y solo deja escribir números | `\d{8}` |
+| `correo` | Algo@algo.algo, guardado en minúsculas, cortado a 100 | `[^@\s]+@[^@\s]+\.[^@\s]+` |
+| `estatura` | Número de 0.30 a 2.50 (m), dos decimales | No acepta texto ni booleanos |
+| `peso` | Número de 1 a 900 (lb), un decimal | No acepta texto ni booleanos |
+| `dolor` | Entero de 0 a 10 | No acepta texto ni booleanos |
+| `proxima_cita` | Fecha y hora reales | `AAAA-MM-DD HH:MM` (también acepta la `T` de `datetime-local`) |
+| `diagnostico`, `notas` | Texto libre con saltos de línea, cortado a 1000 y 2000 | |
 
 ### Comandos de terminal
 
@@ -404,6 +436,8 @@ Las reglas de perfiles están en `web/basedatos.py` y repetidas en `web/publico/
 | `python3 web/basedatos.py admin USUARIO` | Asigna el rol de administrador y activa el perfil |
 | `python3 web/basedatos.py clave USUARIO` | Pide y guarda una contraseña nueva |
 | `python3 web/basedatos.py revisar` | Solo avisa si no hay administrador. Lo usa `encender_red.sh`. |
+| `python3 web/datos_prueba.py` | Agrega 20 pacientes inventados, marcados con `creado_por = datos-de-prueba` |
+| `python3 web/datos_prueba.py borrar` | Borra solo esos pacientes de prueba |
 
 ## 10. Estructura del panel web
 
@@ -427,7 +461,7 @@ Los atributos `id` del HTML enlazan las plantillas con JavaScript. Al renombrar 
 |---|---|---|
 | `web/servidor.py` | Servidor HTTP. Atiende la API, guarda el estado compartido en la clase `Camilla`, aplica las reglas del control y ejecuta la vigilancia periódica. | Constantes del inicio (`PUERTO_WEB`, `IP_RED`, `TIEMPO_LIBERAR`, `ESPERA_SOLICITUD`, `HOMBRE_MUERTO`, `SESION_HORAS`, `LIMITES`). Reglas del control y órdenes a los motores en `Camilla`. Rutas en `ACCIONES`, `administrar` y `do_POST`. `encender_red.sh` lee las frases de `anotar()`: al cambiarlas hay que ajustar su monitor. |
 | `web/paginas.py` | Compone el HTML desde `plantillas/` y entrega los archivos de `publico/`. | Tipos de archivo que se entregan (`TIPOS`) y la forma de resolver los `incluir` (`INCLUIR`, `componer`). |
-| `web/basedatos.py` | Acceso a SQLite: perfiles, contraseñas, pacientes y comandos de terminal. | Tablas (`TABLAS`), roles (`ROLES`), reglas de perfiles (`revisar_clave`, `crear_usuario`) y de pacientes (`guardar_paciente`), `CLAVE_MINIMA`, `EDAD_MAXIMA`, `VUELTAS` y los comandos de terminal. |
+| `web/basedatos.py` | Acceso a SQLite: perfiles, contraseñas, pacientes y comandos de terminal. | Tablas (`TABLAS`), roles (`ROLES`), reglas de perfiles (`revisar_clave`, `crear_usuario`) y de pacientes (`revisar_paciente`, `guardar_paciente`, `migrar_pacientes`), `CLAVE_MINIMA`, `EDAD_MAXIMA`, `MEDIDAS`, `VUELTAS` y los comandos de terminal. |
 | `web/camilla.db` | Base de datos SQLite. La crea `basedatos.py` y no se sube a git. | No se edita a mano. Se administra desde el panel o con `web/basedatos.py`. |
 | `red/instalar_red.sh` | Instala `hostapd` y crea la configuración de la red WiFi. Se ejecuta una vez. | Nombre y parámetros de la red: `ssid`, `country_code`, `hw_mode`, `channel`. |
 | `red/encender_red.sh` | Enciende y apaga la red y la página, y muestra los eventos en vivo. | Dirección IP y rango de DHCP (`--dhcp-range`), redirección de puertos y mensajes del monitor (bloque `case`). |
@@ -444,7 +478,7 @@ Las rutas son relativas a `web/plantillas/`.
 | `panel/panel.html` | Vista `vistaPanel`: reúne encabezado, barra de pestañas y contenido de cada pestaña. | Bloques que forman el panel e inclusión de pestañas. |
 | `panel/encabezado.html` | Título, perfil de la persona y botones Bloquear y Salir. | Nombre del equipo, datos del perfil y botones del encabezado. |
 | `panel/pestanas.html` | Barra de pestañas del administrador. | Botones de pestaña (`data-pestana`), textos e iconos. |
-| `panel/registros.html` | Pestaña Registros: formulario y tabla de pacientes. | Campos del formulario, columnas y buscador. |
+| `panel/registros.html` | Pestaña Registros: tabla de pacientes a lo ancho y, aparte, el formulario en un panel lateral (`offcanvas` `#panelPaciente`). | Columnas, buscador y campos del formulario. |
 | `panel/usuarios.html` | Pestaña Usuarios: tabla de perfiles. | Columnas y texto de ayuda. |
 | `panel/control/control.html` | Pestaña Control: acomoda sus bloques. | Orden y columnas de los bloques de control. |
 | `panel/control/barra-control.html` | Barra que muestra quién tiene el control. | Estructura de la barra. Los textos y botones cambian en `ui/pintado.js`. |
@@ -462,6 +496,7 @@ Las rutas son relativas a `web/plantillas/`.
 | `modales/sin-conexion.html` | `modalSinConexion`: se perdió la conexión. | Título, texto y botón Reintentar. |
 | `modales/confirmar.html` | `modalConfirmar`: confirmación genérica. | Estructura. Cada texto lo define quien llama a `confirmar`. |
 | `modales/clave.html` | `modalClave`: contraseña nueva para otro perfil. | Campo y textos del formulario. |
+| `modales/ficha-paciente.html` | `modalFicha`: ficha de un paciente, solo lectura, con botón Editar. | Lo llena `abrirFicha` en `vistas/pacientes.js`. |
 
 ### 10.4 Hojas de estilo
 
@@ -477,7 +512,7 @@ Las rutas son relativas a `web/publico/css/`.
 | `panel.css` | Partes fijas del panel. | Encabezado, barra de control (`.control-barra`), luz de estado (`.estado`), barra inferior, paro flotante y registro de comandos. |
 | `modales.css` | Modales y avisos. | Franja superior (`.modal-tope`, `.tope-*`), tonos de icono, cuenta regresiva y colores de los toasts (`.aviso-*`). |
 | `login.css` | Pantalla de acceso. | Tamaño y posición de la caja y sus títulos. |
-| `admin.css` | Pestañas y tablas del administrador. | Pestañas (`.pestanas`), tablas (`.tabla-admin`), buscador y tarjeta de paciente. |
+| `admin.css` | Pestañas y tablas del administrador. | Pestañas (`.pestanas`), tablas (`.tabla-admin`), buscador, panel del formulario (`.panel-paciente`) y ficha de paciente. |
 
 ### 10.5 Módulos JavaScript
 
@@ -507,7 +542,7 @@ Las rutas son relativas a `web/publico/js/`.
 | `vistas/sesion.js` | Entrada y salida del panel: `entrarAlPanel`, `sesionTerminada`. | Qué ocurre al entrar o salir, incluida la toma automática del control. |
 | `vistas/cesion.js` | Titular del control y pedidos: `aplicarControl`, `pedirControl`, `atenderSolicitud`, `resolverSolicitud`. | Flujo y avisos al tomar, pedir, ceder o liberar el control. |
 | `vistas/pestanas.js` | Pestañas del panel y permisos por rol: `aplicarRol`. | Lista `PESTANAS`, qué se carga al abrir cada una y qué ve cada rol. |
-| `vistas/pacientes.js` | Pestaña Registros. | Filas de la tabla (`filaPaciente`), búsqueda, validación, guardado y borrado. |
+| `vistas/pacientes.js` | Pestaña Registros. | Filas de la tabla (`filaPaciente`), búsqueda, ficha (`abrirFicha`), panel del formulario (`abrirFormulario`, aviso de cambios sin guardar), máscaras de DPI y teléfono (`mascaraNumeros`), validación, guardado y borrado. |
 | `vistas/usuarios.js` | Pestaña Usuarios. | Filas de la tabla (`filaUsuario`), opciones del menú (`menuAcciones`, `ACCIONES`) y sus confirmaciones. |
 
 ### 10.6 Bootstrap y fuentes
@@ -529,7 +564,7 @@ Las rutas son relativas a `web/publico/vendor/`. Son archivos de terceros: no se
 | Límite de ángulo | `LIMITES` en `web/servidor.py` y `CONFIG` en `publico/js/config.js` |
 | Puerto o dirección IP | `PUERTO_WEB` e `IP_RED` en `web/servidor.py`, y `red/encender_red.sh` |
 | Reglas de perfiles | `web/basedatos.py`, `ui/formularios.js` y `vistas/acceso.js` |
-| Campo nuevo de paciente | `TABLAS` y `guardar_paciente` en `web/basedatos.py`, `panel/registros.html` y `vistas/pacientes.js`. Una base ya creada no recibe la columna nueva. |
+| Campo nuevo de paciente | `TABLA_PACIENTES`, `CAMPOS_PACIENTE`, `revisar_paciente` y, si es texto, `TEXTOS` en `web/basedatos.py`; el campo con `data-campo` en `panel/registros.html`; sus reglas en `vistas/pacientes.js`. Una base ya creada no recibe la columna nueva: hace falta una migración como `migrar_pacientes`. |
 | Hoja de estilo nueva | El archivo en `publico/css/` y su `<link>` en `plantillas/index.html` |
 | Módulo JavaScript nuevo | El archivo en `publico/js/`, su `import` en el módulo que lo usa y, si tiene eventos, su `iniciar...` en `main.js` |
 | Modal nuevo | Su archivo en `plantillas/modales/`, su `incluir` en `plantillas/index.html` y la llamada a `abrirModal` en el módulo que lo abre. `ui/modales.js` lo registra solo. |

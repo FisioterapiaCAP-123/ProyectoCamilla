@@ -1,60 +1,212 @@
 <div class="pestana-admin" id="pestanaRegistros" hidden>
-  <div class="row g-3 align-items-start">
+  <section class="card border shadow-sm rounded-4 overflow-hidden">
+    <div class="card-header bg-body d-flex align-items-center gap-2 flex-wrap p-3">
+      <h2 class="tipo-titulo text-uppercase mb-0 me-auto titulo-admin">
+        Registros <span class="badge rounded-pill text-bg-secondary align-middle tipo-dato cuenta-registros" id="cuentaPacientes">0</span>
+      </h2>
+      <div class="position-relative buscador-admin">
+        <svg class="lupa-buscador" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/>
+        </svg>
+        <input type="search" class="form-control" id="buscarPaciente" placeholder="Nombre, DPI, carné o teléfono"
+               aria-label="Buscar por nombre, DPI, carné o teléfono" autocomplete="off">
+      </div>
+      <button type="button" class="btn btn-primary tipo-titulo text-uppercase fw-semibold d-inline-flex align-items-center gap-2 btn-nuevo-paciente"
+              id="btnNuevoPaciente">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+        Nuevo registro
+      </button>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 tabla-admin tabla-pacientes">
+        <thead>
+          <tr>
+            <th scope="col" class="ps-3">Paciente</th>
+            <th scope="col">Edad</th>
+            <th scope="col" class="d-none d-md-table-cell">Teléfono</th>
+            <th scope="col" class="d-none d-lg-table-cell">Fisioterapeuta</th>
+            <th scope="col" class="d-none d-lg-table-cell">Dolor</th>
+            <th scope="col" class="d-none d-sm-table-cell">Próxima cita</th>
+            <th scope="col" class="d-none d-xl-table-cell">Registrado</th>
+            <th scope="col" class="text-end pe-3"><span class="visually-hidden">Acciones</span></th>
+          </tr>
+        </thead>
+        <tbody id="listaPacientes"></tbody>
+      </table>
+    </div>
+    <p class="text-center py-4 mb-0 d-none text-body-secondary" id="sinPacientes">Todavía no hay registros.</p>
+  </section>
+</div>
 
-    <div class="col-12 col-lg-4">
-      <section class="card border shadow-sm rounded-4 tarjeta-paciente" id="tarjetaPaciente">
-        <div class="card-body p-3 p-md-4">
-          <h2 class="tipo-titulo text-uppercase mb-3 titulo-admin" id="tituloPaciente">Nuevo registro</h2>
-          <form id="formPaciente" novalidate>
-            <div class="mb-3">
-              <label for="pacNombre" class="form-label tipo-titulo text-uppercase fw-semibold rotulo-campo-compacto">Paciente</label>
-              <input type="text" class="form-control form-control-lg" id="pacNombre" maxlength="80"
-                     autocomplete="off" autocapitalize="words" placeholder="Nombre completo" required>
-              <div class="invalid-feedback" id="pacNombreAviso">Escribe el nombre del paciente.</div>
+<!-- Formulario de paciente: panel que sale por la derecha (a pantalla completa en el celular).
+     Si tiene cambios sin guardar, cerrarlo pregunta antes (vistas/pacientes.js) -->
+<div class="offcanvas offcanvas-end panel-paciente" tabindex="-1" id="panelPaciente" aria-labelledby="tituloPaciente">
+  <div class="offcanvas-header border-bottom px-3 px-md-4 tarjeta-paciente">
+    <div class="me-auto">
+      <h2 class="tipo-titulo text-uppercase mb-0 titulo-admin" id="tituloPaciente">Nuevo registro</h2>
+      <p class="small text-body-secondary mb-0">Todos los campos son opcionales.</p>
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+  </div>
+  <div class="offcanvas-body px-3 px-md-4">
+        <form id="formPaciente" novalidate>
+
+          <h3 class="text-uppercase fw-semibold subtitulo-panel text-body-secondary mb-3">Datos personales</h3>
+          <div class="row g-3 mb-4">
+            <div class="col-sm-6">
+              <label for="pacNombres" class="form-label tipo-titulo text-uppercase fw-semibold rotulo-campo-compacto">Nombres</label>
+              <input type="text" class="form-control form-control-lg" id="pacNombres" data-campo="nombres" maxlength="60"
+                     autocomplete="off" autocapitalize="words">
+              <div class="invalid-feedback" id="pacNombresAviso"></div>
             </div>
-            <div class="mb-4">
-              <label for="pacEdad" class="form-label tipo-titulo text-uppercase fw-semibold rotulo-campo-compacto">Edad</label>
-              <div class="input-group input-group-lg has-validation campo-edad">
-                <input type="number" class="form-control tipo-dato" id="pacEdad" min="0" max="120" step="1"
-                       inputmode="numeric" autocomplete="off" required>
-                <span class="input-group-text">años</span>
-                <div class="invalid-feedback" id="pacEdadAviso">La edad debe ser un número entre 0 y 120.</div>
+            <div class="col-sm-6">
+              <label for="pacApellidos" class="form-label tipo-titulo text-uppercase fw-semibold rotulo-campo-compacto">Apellidos</label>
+              <input type="text" class="form-control form-control-lg" id="pacApellidos" data-campo="apellidos" maxlength="60"
+                     autocomplete="off" autocapitalize="words">
+              <div class="invalid-feedback" id="pacApellidosAviso"></div>
+            </div>
+            <div class="col-sm-5">
+              <label for="pacSexo" class="form-label tipo-titulo text-uppercase fw-semibold rotulo-campo-compacto">Sexo</label>
+              <select class="form-select form-select-lg" id="pacSexo" data-campo="sexo">
+                <option value="">—</option>
+                <option value="F">Femenino</option>
+                <option value="M">Masculino</option>
+              </select>
+              <div class="invalid-feedback" id="pacSexoAviso"></div>
+            </div>
+            <div class="col-sm-7">
+              <label for="pacNacimiento" class="form-label tipo-titulo text-uppercase fw-semibold rotulo-campo-compacto">Fecha de nacimiento</label>
+              <input type="date" class="form-control form-control-lg tipo-dato" id="pacNacimiento" data-campo="nacimiento"
+                     autocomplete="off">
+              <div class="invalid-feedback" id="pacNacimientoAviso"></div>
+              <div class="form-text tipo-dato" id="pacEdadTexto"></div>
+            </div>
+            <div class="col-sm-7">
+              <label for="pacDpi" class="form-label tipo-titulo text-uppercase fw-semibold rotulo-campo-compacto">DPI</label>
+              <input type="text" class="form-control form-control-lg tipo-dato" id="pacDpi" data-campo="dpi"
+                     inputmode="numeric" autocomplete="off">
+              <div class="invalid-feedback" id="pacDpiAviso"></div>
+            </div>
+            <div class="col-sm-5">
+              <label for="pacCarne" class="form-label tipo-titulo text-uppercase fw-semibold rotulo-campo-compacto">Carné</label>
+              <input type="text" class="form-control form-control-lg tipo-dato" id="pacCarne" data-campo="carne" maxlength="20"
+                     autocomplete="off">
+              <div class="invalid-feedback" id="pacCarneAviso"></div>
+            </div>
+          </div>
+
+          <h3 class="text-uppercase fw-semibold subtitulo-panel text-body-secondary border-top pt-3 mb-3">Contacto</h3>
+          <div class="row g-3 mb-4">
+            <div class="col-sm-5">
+              <label for="pacTelefono" class="form-label tipo-titulo text-uppercase fw-semibold rotulo-campo-compacto">Teléfono</label>
+              <input type="tel" class="form-control form-control-lg tipo-dato" id="pacTelefono" data-campo="telefono"
+                     inputmode="numeric" autocomplete="off">
+              <div class="invalid-feedback" id="pacTelefonoAviso"></div>
+            </div>
+            <div class="col-sm-7">
+              <label for="pacCorreo" class="form-label tipo-titulo text-uppercase fw-semibold rotulo-campo-compacto">Correo</label>
+              <input type="email" class="form-control form-control-lg" id="pacCorreo" data-campo="correo" maxlength="100"
+                     autocomplete="off" autocapitalize="off" spellcheck="false">
+              <div class="invalid-feedback" id="pacCorreoAviso"></div>
+            </div>
+            <div class="col-sm-7">
+              <label for="pacEmergencia" class="form-label tipo-titulo text-uppercase fw-semibold rotulo-campo-compacto">Contacto de emergencia</label>
+              <input type="text" class="form-control form-control-lg" id="pacEmergencia" data-campo="emergencia_nombre" maxlength="80"
+                     autocomplete="off" autocapitalize="words" placeholder="Nombre (parentesco)">
+              <div class="invalid-feedback" id="pacEmergenciaAviso"></div>
+            </div>
+            <div class="col-sm-5">
+              <label for="pacEmergenciaTel" class="form-label tipo-titulo text-uppercase fw-semibold rotulo-campo-compacto">Su teléfono</label>
+              <input type="tel" class="form-control form-control-lg tipo-dato" id="pacEmergenciaTel" data-campo="emergencia_telefono"
+                     inputmode="numeric" autocomplete="off">
+              <div class="invalid-feedback" id="pacEmergenciaTelAviso"></div>
+            </div>
+          </div>
+
+          <h3 class="text-uppercase fw-semibold subtitulo-panel text-body-secondary border-top pt-3 mb-3">Medidas</h3>
+          <div class="row g-3 mb-4">
+            <div class="col-6">
+              <label for="pacEstatura" class="form-label tipo-titulo text-uppercase fw-semibold rotulo-campo-compacto">Estatura</label>
+              <div class="input-group input-group-lg has-validation">
+                <input type="number" class="form-control tipo-dato" id="pacEstatura" data-campo="estatura" min="0.3" max="2.5" step="0.01"
+                       inputmode="decimal" autocomplete="off">
+                <span class="input-group-text">m</span>
+                <div class="invalid-feedback" id="pacEstaturaAviso"></div>
               </div>
             </div>
-            <div class="d-flex gap-2 flex-wrap">
-              <button type="submit" class="btn btn-primary btn-lg flex-fill tipo-titulo text-uppercase fw-semibold btn-formulario" id="btnGuardarPaciente">Guardar</button>
-              <button type="button" class="btn btn-outline-secondary btn-lg flex-fill tipo-titulo text-uppercase fw-semibold d-none btn-formulario btn-formulario-sec" id="btnCancelarPaciente">Cancelar</button>
+            <div class="col-6">
+              <label for="pacPeso" class="form-label tipo-titulo text-uppercase fw-semibold rotulo-campo-compacto">Peso</label>
+              <div class="input-group input-group-lg has-validation">
+                <input type="number" class="form-control tipo-dato" id="pacPeso" data-campo="peso" min="1" max="900" step="0.1"
+                       inputmode="decimal" autocomplete="off">
+                <span class="input-group-text">lb</span>
+                <div class="invalid-feedback" id="pacPesoAviso"></div>
+              </div>
             </div>
-          </form>
-        </div>
-      </section>
-    </div>
+          </div>
 
-    <div class="col-12 col-lg-8">
-      <section class="card border shadow-sm rounded-4 overflow-hidden">
-        <div class="card-header bg-body d-flex align-items-center gap-2 flex-wrap p-3">
-          <h2 class="tipo-titulo text-uppercase mb-0 me-auto titulo-admin">
-            Registros <span class="badge rounded-pill text-bg-secondary align-middle tipo-dato cuenta-registros" id="cuentaPacientes">0</span>
-          </h2>
-          <input type="search" class="form-control buscador-admin" id="buscarPaciente" placeholder="Buscar paciente" aria-label="Buscar paciente"
-                 autocomplete="off">
-        </div>
-        <div class="table-responsive">
-          <table class="table table-hover align-middle mb-0 tabla-admin">
-            <thead>
-              <tr>
-                <th scope="col" class="ps-3">Paciente</th>
-                <th scope="col">Edad</th>
-                <th scope="col" class="d-none d-sm-table-cell">Registrado</th>
-                <th scope="col" class="text-end pe-3"><span class="visually-hidden">Acciones</span></th>
-              </tr>
-            </thead>
-            <tbody id="listaPacientes"></tbody>
-          </table>
-        </div>
-        <p class="text-center py-4 mb-0 d-none text-body-secondary" id="sinPacientes">Todavía no hay registros.</p>
-      </section>
-    </div>
+          <h3 class="text-uppercase fw-semibold subtitulo-panel text-body-secondary border-top pt-3 mb-3">Atención</h3>
+          <div class="mb-3">
+            <label for="pacFisio" class="form-label tipo-titulo text-uppercase fw-semibold rotulo-campo-compacto">Fisioterapeuta responsable</label>
+            <input type="text" class="form-control form-control-lg" id="pacFisio" data-campo="fisioterapeuta" maxlength="80"
+                   list="listaFisios" autocomplete="off" autocapitalize="words">
+            <datalist id="listaFisios"></datalist>
+            <div class="invalid-feedback" id="pacFisioAviso"></div>
+          </div>
+          <div class="mb-3">
+            <label for="pacDiagnostico" class="form-label tipo-titulo text-uppercase fw-semibold rotulo-campo-compacto">Diagnóstico</label>
+            <textarea class="form-control form-control-lg" id="pacDiagnostico" data-campo="diagnostico" rows="3" maxlength="1000"
+                      autocomplete="off"></textarea>
+            <div class="invalid-feedback" id="pacDiagnosticoAviso"></div>
+          </div>
+          <div class="mb-3">
+            <label for="pacDolor" class="form-label tipo-titulo text-uppercase fw-semibold rotulo-campo-compacto">Dolor (EVA)</label>
+            <div class="input-group input-group-lg has-validation campo-corto">
+              <input type="number" class="form-control tipo-dato" id="pacDolor" data-campo="dolor" min="0" max="10" step="1"
+                     inputmode="numeric" autocomplete="off" aria-describedby="pacDolorAyuda">
+              <span class="input-group-text">de 10</span>
+              <div class="invalid-feedback" id="pacDolorAviso"></div>
+            </div>
+            <div class="form-text" id="pacDolorAyuda">0 es sin dolor y 10 el peor dolor imaginable.</div>
+          </div>
+          <div class="mb-3">
+            <span class="form-label d-block tipo-titulo text-uppercase fw-semibold rotulo-campo-compacto" id="rotuloCita">Próxima cita</span>
+            <div class="row g-2">
+              <div class="col-12">
+                <label for="pacCitaFecha" class="form-label small fw-semibold text-body-secondary mb-1">Fecha</label>
+                <input type="date" class="form-control form-control-lg tipo-dato" id="pacCitaFecha" autocomplete="off">
+                <div class="invalid-feedback" id="pacCitaFechaAviso"></div>
+              </div>
+              <div class="col-12">
+                <label for="pacCitaHora" class="form-label small fw-semibold text-body-secondary mb-1">Hora</label>
+                <div class="input-group input-group-lg has-validation hora-cita" role="group" aria-label="Hora de la próxima cita">
+                  <span class="input-group-text" aria-hidden="true">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                  </span>
+                  <select class="form-select tipo-dato" id="pacCitaHora" aria-label="Hora"></select>
+                  <span class="input-group-text tipo-dato px-2" aria-hidden="true">:</span>
+                  <select class="form-select tipo-dato" id="pacCitaMinuto" aria-label="Minutos"></select>
+                  <select class="form-select tipo-dato" id="pacCitaPeriodo" aria-label="AM o PM">
+                    <option value="">—</option>
+                    <option value="AM">AM</option>
+                    <option value="PM">PM</option>
+                  </select>
+                  <div class="invalid-feedback" id="pacCitaHoraAviso"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="mb-4">
+            <label for="pacNotas" class="form-label tipo-titulo text-uppercase fw-semibold rotulo-campo-compacto">Notas</label>
+            <textarea class="form-control form-control-lg" id="pacNotas" data-campo="notas" rows="3" maxlength="2000"
+                      autocomplete="off"></textarea>
+            <div class="invalid-feedback" id="pacNotasAviso"></div>
+          </div>
 
+          <div class="d-flex gap-2 flex-wrap">
+            <button type="submit" class="btn btn-primary btn-lg flex-fill tipo-titulo text-uppercase fw-semibold btn-formulario" id="btnGuardarPaciente">Guardar</button>
+            <button type="button" class="btn btn-outline-secondary btn-lg flex-fill tipo-titulo text-uppercase fw-semibold btn-formulario btn-formulario-sec" data-bs-dismiss="offcanvas">Cancelar</button>
+          </div>
+        </form>
   </div>
 </div>
