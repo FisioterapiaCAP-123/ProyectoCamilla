@@ -13,7 +13,7 @@ export const CONFIG = {
   cabeza:  { min: -30, max: 70, ref: 0, paso: 1, numerica: true, unidad: '°',
              continua: true, sinTope: true, etiqueta: 'Cabeza' },
   piernas: { min: 0, max: 45, ref: 0, paso: 1, numerica: true, unidad: '°',
-             etiqueta: 'Piernas' }
+             continua: true, sinTope: true, etiqueta: 'Piernas' }
 };
 
 export const RITMO = {

@@ -1,23 +1,27 @@
 # Contexto del proyecto
 
-**Fecha:** 09-11-2026. Resumen para retomar el trabajo desde cero: qué se busca, cómo está todo y qué sigue. El detalle del sistema está en `GUIA.md` e `INTEGRACION.md`, pero esas dos **todavía no incluyen la integración del ESP32** (ver "Documentación pendiente").
+**Fecha:** 09-11-2026, con agregados del 10-11 y del 11-11-2026. Resumen para retomar el trabajo desde cero: qué se busca, cómo está todo y qué sigue. El detalle del sistema está en `GUIA.md` e `INTEGRACION.md`, pero esas dos **todavía no incluyen la integración del ESP32** (ver "Documentación pendiente").
 
 ## Dónde quedamos
 
 - **09-11: primera prueba real completa.** La cadena página → Raspberry → USB → ESP32 → módulo de relés → actuadores funcionó: se movieron. Al desconectar el USB, la página avisa "Sin conexión con los motores" y los relés se apagan. Al reconectarlo, vuelve solo.
 - Con los motores en marcha aparecen **errores USB** (`urb stopped: -32`) que dejaban el puerto mudo hasta reiniciar el servidor. `web/hardware.py` ya reabre el puerto solo (commit `99a91cf`, en GitHub). **Falta bajarlo en la Raspberry y probarlo con motores.**
 - El módulo de relés es **solo para la presentación del viernes 13-11-2026**. El definitivo es **un BTS7960 por sección** (ver "Hardware").
-- **09-11, tarde:** el compañero actualizó su código para manejar un puente H (L298N o BTS7960) en los pines 25 y 26. `esp32/main.py` se adaptó: ahora usa `MODULO = "puente"` por omisión, y los relés quedan como opción. Al escribir esto estaba sin commit (confirmar con `git status`).
-- Rama `esp32-conexion`, en GitHub en `99a91cf`. En el PC la rama sigue enlazada a `origin/optimizaciones-esp32`, así que hay que subir con `git push origin esp32-conexion`.
+- **09-11, tarde:** el compañero actualizó su código para manejar un puente H (L298N o BTS7960) en los pines 25 y 26. `esp32/main.py` se adaptó: ahora usa `MODULO = "puente"` por omisión, y los relés quedan como opción. **Se cargó en la placa real y funcionó con el puente H en Cabeza**: subir, bajar y parar desde la página, sin cortes del ESP32 durante unos 3 minutos de prueba. Está en el commit `fa1a602`, en GitHub.
+- **11-11: llegó el MD-BTS7960 y se decidió empezar por Piernas, no por Cabeza.** El compañero ya probó los 2 actuadores de Piernas en un solo BTS7960 y aguantó, con su código (WiFi y PWM; copia en `compi.txt`, que **tiene la clave del WiFi: no se sube**). Ese código usa **GPIO 26 → RPWM y GPIO 27 → LPWM**; su comentario dice 25 y 26, pero lo que funcionó fue 26 y 27. `esp32/main.py` ahora maneja `piernas` en el modo `puente` con esos pines, siempre al 100 %. `config.js` le puso `continua` y `sinTope` a Piernas. Cabeza queda "Sin actuador" hasta tener su propio puente H.
+- **10-11: se habló de sensores de ángulo para Cabeza y Piernas.** Ver "Propuestas → Sensores de ángulo".
+- **11-11: el usuario eligió un encoder óptico absoluto en código Gray para Piernas, de 0° a 90°**, con LED y fototransistores sueltos que arma él, e impreso en 3D por un compañero. El usuario lo movió a la **rama local `backup-cambios-esp32`** (commit `ce2474a`, carpeta `encoder/`). Ese commit también guarda `codigoesp32.txt` con la clave del WiFi: **no subir esa rama así**; para publicar el encoder, armar una rama sin ese archivo. Primero se arma un **banco de prueba** que se gira a mano. Guía visual: https://claude.ai/artifact/MAu8PJ5JfVQvSUGJZH4XQU. Ver "Encoder de piernas".
+- Rama `esp32-conexion`, en GitHub en `fa1a602`. En el PC la rama sigue enlazada a `origin/optimizaciones-esp32`, así que hay que subir con `git push origin esp32-conexion`.
 
 **Siguiente, en orden:**
 
-1. **En la Raspberry:** `git pull` con internet y cargar el nuevo `esp32/main.py` con Thonny, en modo puente. Después, levantar el servidor desde la pantalla de la Raspberry y probar Cabeza con el puente H. Al cortarse debe salir `se perdio la conexion con el ESP32: dejo de responder` y, unos segundos después, `ESP32 conectado`, sin reiniciar nada.
-2. **Comprar** lo de la "Lista de compra".
-3. **Presentación:** relés con fusible y TVS, solo Cabeza. Opcional: probar la app con un L298N y un solo actuador 3000N sin carga.
+1. **Bajar el código en la Raspberry** con `git pull` y **volver a cargar `esp32/main.py` en el ESP32 con Thonny** (Upload to /), porque cambió a `piernas` en 26 y 27. Comprobar en Thonny con `print("piernas" in open("main.py").read())`, que debe dar `True`. Al levantar el servidor debe salir `ESP32 conectado en /dev/ttyUSB0: piernas`. Probar subir, bajar y parar Piernas. Si sube cuando debería bajar, intercambiar `PIN_EXTENDER` y `PIN_RETRAER`. Si se corta, debe salir `se perdio la conexion con el ESP32: dejo de responder` y luego `ESP32 conectado`, sin reiniciar nada.
+2. **Cabeza:** otro BTS7960 en pines libres (por ejemplo, 25 y 33), y lo de la "Lista de compra".
+3. **Probar con la red Camilla** desde el celular (ver "Comandos"): la página no debe perder la conexión mientras se mueve el motor. Luego, hacer el conteo de errores USB. Al escribir esto, el usuario no había reportado el resultado.
 4. **Detener los registros** que quedaron corriendo en la Raspberry (ver "Diagnóstico").
-5. **Después del viernes:** agregar Piernas en el firmware y en la página, y probar con BTS7960.
-6. **Resolver cómo recargar el firmware** cuando Thonny no logra detener el programa (ver "Problemas").
+5. **Piernas con BTS7960:** firmware y página listos el 11-11. Se probaron con simulación: el firmware con PWM falso y el panel en Chrome contra el firmware falso. Falta la prueba en la Raspberry (paso 1).
+6. **Para recargar el firmware:** con el servidor apagado, presionar EN y después Stop en Thonny (ver "Problemas").
+7. **Encoder de piernas:** imprimir las 4 piezas, comprar los componentes y armar el banco siguiendo la guía. Después, con las medidas de la bisagra, diseñar los soportes para la camilla (ver "Encoder de piernas").
 
 ## Qué se busca y cómo está
 
@@ -61,6 +65,8 @@ ESP32 con esp32/main.py (MicroPython) -> relés hoy, BTS7960 al final -> actuado
 ```text
 red/                    instalar_red.sh, encender_red.sh
 esp32/main.py           programa del ESP32 (se carga con Thonny como main.py)
+compi.txt               código del compañero con BTS7960 (WiFi y PWM). TIENE LA CLAVE DEL WIFI. No se sube.
+(encoder/ está en la rama local backup-cambios-esp32: generar_piezas.py, stl/, prueba_encoder.py)
 codigoesp32.txt         código original del compañero, solo respaldo. TIENE LA CLAVE DEL WIFI.
 web/
   servidor.py, basedatos.py, paginas.py
@@ -97,25 +103,25 @@ web/
 
 **Módulo de potencia:** se elige con `MODULO` en `esp32/main.py`, y se cambia en Thonny antes de cargar.
 
-- **`"puente"`**, por omisión desde el 09-11: L298N o BTS7960, con los mismos pines del código nuevo del compañero. Los dos actuadores de Cabeza van en paralelo en el mismo canal.
+- **`"puente"`**, por omisión: BTS7960 (o L298N) para **Piernas** desde el 11-11. Los dos actuadores de Piernas van en paralelo en el mismo BTS7960. Del 09-11 al 11-11 manejó Cabeza en 25 y 26.
 
-  | GPIO | L298N | BTS7960 | Función |
+  | GPIO | BTS7960 | L298N | Función |
   |---|---|---|---|
-  | 25 (`PIN_EXTENDER`) | IN1 | RPWM | Extender |
-  | 26 (`PIN_RETRAER`) | IN2 | LPWM | Retraer |
-  | `PIN_HABILITAR = None` | ENA con jumper | R_EN y L_EN a 3.3 V | Habilitar. Con un GPIO, se apaga al parar. |
+  | 26 (`PIN_EXTENDER`) | RPWM | IN1 | Extender |
+  | 27 (`PIN_RETRAER`) | LPWM | IN2 | Retraer |
+  | `PIN_HABILITAR = None` | R_EN y L_EN a 3.3 V | ENA con jumper | Habilitar. Con un GPIO, se apaga al parar. |
 
   Usa PWM a 1000 Hz con `VELOCIDAD = 100` %. Las salidas se crean en 0, aunque el PWM de la placa arranque a medias.
-- **`"reles"`**: el módulo de 4 relés, activo en bajo (`ACTIVO_BAJO = True`), con 26→IN1, 27→IN2, 25→IN3 y 33→IN4.
+- **`"reles"`**: el módulo de 4 relés para **Cabeza**, activo en bajo (`ACTIVO_BAJO = True`), con 26→IN1, 27→IN2, 25→IN3 y 33→IN4. Usa los mismos 26 y 27: no se pueden tener relés y BTS7960 a la vez.
 
-El LED azul (GPIO 2) se enciende mientras hay marcha. Para agregar una sección se edita `SECCIONES`; el servidor y la página la detectan solos. El modo puente se probó el 09-11 con placa y PWM simulados, sin fallas. **Falta probarlo en la placa real.**
+El LED azul (GPIO 2) se enciende mientras hay marcha. Para agregar una sección se edita `SECCIONES`; el servidor la detecta sola, y en la página necesita `continua` y `sinTope` en `config.js`. El modo puente con Cabeza funcionó en la placa real el 09-11. Con Piernas en 26 y 27 se probó el 11-11 en simulación (`probar_puente_piernas.py` y `probar_panel_piernas.py`, sin fallas); falta la placa real.
 
 **Protocolo por USB**, líneas terminadas en `*XX` (XOR en hexadecimal):
 
 ```text
-Raspberry -> ESP32    M cabeza 1 (extender) o M cabeza -1 (retraer), repetido cada 200 ms
-                      S cabeza, X (detener todo), P (sigo aquí)
-ESP32 -> Raspberry    E cabeza=detenido
+Raspberry -> ESP32    M piernas 1 (extender) o M piernas -1 (retraer), repetido cada 200 ms
+                      S piernas, X (detener todo), P (sigo aquí)
+ESP32 -> Raspberry    E piernas=detenido
 ```
 
 **Seguridad implementada:**
@@ -161,13 +167,15 @@ ESP32 -> Raspberry    E cabeza=detenido
    - Fusible **retardado, uno por módulo, en B+**. Así, si se funde, paran los dos actuadores juntos. **Cabeza 7.5 A y Piernas 10 A**, de vidrio 6 x 30 mm, con portafusible en línea de 15 A o más.
    - Cable de 14 AWG para B+ y B−, y de 16 AWG a los actuadores.
    - Sin TVS al principio: no hay contactos que chispeen y trae diodos internos. Se confirma con la prueba de conteo de errores.
-   - Control. Cabeza ya está programada en modo puente; Piernas es una propuesta sin programar:
+   - Control. Desde el 11-11 Piernas está programada en modo puente con los pines del compañero; Cabeza queda para después, sin programar:
 
-     | Pin del módulo | Cabeza | Piernas |
+     | Pin del módulo | Piernas (programado) | Cabeza (propuesta) |
      |---|---|---|
-     | RPWM (extender) | GPIO 25 | GPIO 18 |
-     | LPWM (retraer) | GPIO 26 | GPIO 19 |
-     | R_EN y L_EN, unidos | 3.3 V, o GPIO 27 con `PIN_HABILITAR` | GPIO 21 |
+     | RPWM (extender) | GPIO 26 | GPIO 25 |
+     | LPWM (retraer) | GPIO 27 | GPIO 33 |
+     | R_EN y L_EN, unidos | 3.3 V | 3.3 V, o GPIO 13 con habilitar |
+
+     El artifact del cableado BTS7960 todavía muestra la propuesta vieja (Cabeza en 25/26/27 y Piernas en 18/19/21). Manda esta tabla.
 
    - VCC va a 3V3 del ESP32 y GND al GND del ESP32. Si EN va a un GPIO, se pone una resistencia de 10 kΩ de EN a GND, para que el módulo quede apagado mientras arranca el ESP32. R_IS y L_IS quedan sin conectar, porque pueden pasar de 3.3 V.
    - En estas placas el GND de control y el B− suelen estar unidos: comprobarlo con el multímetro.
@@ -269,7 +277,9 @@ Falta un paro físico que corte la energía de los motores sin depender de ningu
 **Hardware y conexión (09-11)**
 
 - **Ruido en el USB con motores:** con solo los relés hubo 0 errores en 1 minuto; con actuadores, 5, aun con los cables separados. A las 14:48 también se cayó el teclado USB, sin que nadie lo tocara. El kernel registró `cp210x ttyUSB0: usb_serial_generic_read_bulk_callback - urb stopped: -32`, y después de eso Linux deja de leer el puerto hasta reabrirlo. `99a91cf` hace que se recupere, pero no quita el ruido: cada corte detiene el movimiento unos segundos. Causa probable: chispas en los contactos de los relés. Medidas: TVS, separar cables, aislar el módulo con `JD-VCC` y 5 V aparte, ferrita en el USB, y con el BTS7960 se espera menos ruido.
-- **Thonny no logra detener nuestro programa:** muestra "Device is busy" y Stop no entra. Habrá que resolverlo antes de cargar el firmware del BTS7960. Ideas sin probar: presionar EN y enseguida Stop, usar `mpremote`, o agregar al firmware unos segundos al arrancar en los que se pueda interrumpir.
+- **Thonny a veces no logra detener nuestro programa:** muestra "Device is busy". La explicación probable es el watchdog. Si la placa ya recibió órdenes, el watchdog está activo: al interrumpir, el programa reinicia la placa a propósito, y en la consola el watchdog la reiniciaría a los 2 s.
+  - El 09-11 en la tarde funcionó así: con el servidor apagado, presionar EN para un arranque limpio sin órdenes, y luego Stop.
+  - Si aun así falla: usar `mpremote`, o agregar al firmware unos segundos al arrancar en los que se pueda interrumpir.
 - **El primer corte de SSH (12:53) no tiene explicación:** no hubo reinicio, voltaje bajo ni eventos de WiFi registrados. Los dos "reinicios" posteriores los hizo el usuario a mano.
 - La Raspberry nunca marcó voltaje bajo con el ESP32 y el módulo de relés alimentados por su USB.
 
@@ -277,7 +287,7 @@ Falta un paro físico que corte la energía de los motores sin depender de ningu
 
 - Sin sensores, los ángulos de cabeza son estimados: "Ir a" y "Plano 0°" no mueven nada, y los textos de ±1° ya no aplican.
 - La estimación de Cabeza llega a 70° en 4.9 s, pero el 3000N tarda unos 30 s en recorrer sus 150 mm. Hay que calibrarla cuando esté montado.
-- Al agregar Piernas o altura en el firmware, hay que ponerles `continua` y `sinTope` en `publico/js/config.js`, como a cabeza. Piernas hoy usa `paso`.
+- Al agregar la altura en el firmware, hay que ponerle `sinTope` en `publico/js/config.js`, como a Cabeza y Piernas (ya tiene `continua`). Piernas lo tiene desde el 11-11. Su estimación llega a 45° en unos 3 s, pero el actuador de 1500N tarda unos 25 s en recorrer sus 250 mm: hay que calibrarla al montarlo.
 - `Camilla.motor` admite un motor: basta mientras se mueva una sección a la vez.
 - Con 2 actuadores por sección y sin sensores pueden desincronizarse un poco. Se corrige solo al llegar a un extremo, por el tope interno.
 
@@ -305,6 +315,7 @@ Falta un paro físico que corte la energía de los motores sin depender de ningu
 - Cabeza usa los 2 actuadores 3000N y Piernas los 2 de 1500N.
 - Los relés son solo para la presentación. El definitivo es un BTS7960 por sección, con los actuadores en paralelo y un fusible retardado por módulo.
 - El servidor reabre el puerto si el ESP32 se queda mudo (`99a91cf`).
+- **11-11:** Piernas mide su ángulo con un encoder óptico absoluto en código Gray, hecho por el usuario. El rango de Piernas pasa a ser **0° a 90°**. `CONFIG` y `LIMITES` siguen en 0–45 hasta integrarlo.
 
 **Dejadas para después por el usuario**
 
@@ -312,7 +323,7 @@ Falta un paro físico que corte la energía de los motores sin depender de ningu
 - Finales de carrera propios y tiempo máximo de marcha.
 - Arreglo del paro.
 - Actualizar `GUIA.md` e `INTEGRACION.md`.
-- Agregar Piernas: después de la presentación, salvo que el usuario diga otra cosa.
+- Cabeza con su propio BTS7960: después de Piernas.
 
 **Pendientes**
 
@@ -331,7 +342,141 @@ Falta un paro físico que corte la energía de los motores sin depender de ningu
 
 **WebSocket:** `aiohttp` en el mismo puerto (`apt install python3-aiohttp`). Pasa de hilos a asyncio. En la página cambian `api/sondeo.js` y `api/ordenes.js`. Mantener `POST /api/paro` como segunda vía.
 
-**Hardware final, además del BTS7960:** paro de hongo con contactor que corte la fuente de motores. Para la altura, otro BTS7960 en pines libres que no choquen con 18, 19, 21, 25, 26 y 27. Reservar 32, 34, 35, 36 y 39 para sensores; del 34 al 39 son solo de entrada. Más adelante, R_IS y L_IS podrían detectar un atasco, con divisor a 3.3 V.
+**Hardware final, además del BTS7960:** paro de hongo con contactor que corte la fuente de motores. Pines ocupados o reservados (11-11): Piernas 26 y 27; Cabeza propuesta 25, 33 y 13; encoder 32, 23 y 34. Para la altura, otro BTS7960 en pines que no choquen con esos (por ejemplo, 18, 19 y 21). Dejar 35, 36 y 39 para sensores; del 34 al 39 son solo de entrada. Evitar 0, 2, 5, 12 y 15, que son pines de arranque. Más adelante, R_IS y L_IS podrían detectar un atasco, con divisor a 3.3 V.
+
+### Encoder de piernas (diseñado el 11-11, sin probar con piezas reales)
+
+Guía visual paso a paso: https://claude.ai/artifact/MAu8PJ5JfVQvSUGJZH4XQU (materiales, impresión, cableado, montaje, Thonny y medidas para la camilla). Fuente local de la guía y de sus imágenes: carpeta temporal de la sesión, no está en el repo.
+
+- **Código:** 6 bits en código Gray, 2° por código. El código k cubre [−19 + 2k, −17 + 2k): 0° es el código 9 y 90° el 54. Cubre de −19° a 109°, con un error máximo de 1°. El código 0 no se fabrica: se lee igual que si no hubiera sector y significa "fuera de rango".
+- **Pistas:** el bit 0 va afuera, a 65 mm del eje, y cada bit siguiente 5 mm más adentro, hasta el bit 5 a 40 mm. Las ventanas miden 4 mm de ancho, con 1 mm de material entre pistas. Hay un canal de referencia a 77 mm, fuera del sector, que siempre ve luz. El sector mide 71.5 mm de radio y 3 mm de espesor.
+- **Óptica:** 7 LED IR de 3 mm (940 nm) arriba y 7 fototransistores abajo, cada uno detrás de una ranura de 1 × 3 mm. Con luz, el canal lee 0; tapado, lee 1.
+- **Electrónica:**
+  - LED con 150 Ω a 3.3 V.
+  - Fototransistores con 10 kΩ a 3.3 V; se cambian por 22k o 47k si con luz no bajan de 0.8 V.
+  - Un 74HC165:
+    - A..F = bits 0..5 y G = referencia.
+    - H fijo a 3.3 V, y SER y CLK INH a GND.
+    - SH/LD al GPIO 32, CLK al GPIO 23 y QH al GPIO 34, con 100 kΩ a GND.
+  - Se leen 9 bits: H, G, F..A, SER.
+  - Si H no lee 1 o SER no lee 0, es falla de cable o del chip. Si G no lee 0, los LED están apagados.
+- **Banco:**
+  - Base de 178 × 148 mm, que entra en una cama de 180.
+  - Tornillo M8 × 40 con la cabeza trabada abajo, rodamiento 608 en el buje del sector, separador, arandela y tuerca.
+  - Horquilla de 2 brazos de 8 mm, con 2 mm de aire a cada lado del sector, atornillada con 2 M3 al soporte de la base.
+  - Topes a −15° y 105°.
+  - Escala de 2 en 2 grados, con números cada 10.
+  - Todo sin soportes. Sector y horquilla en **PLA negro**.
+- **Comprobado en el PC** (scripts `verificar.py` y `render.py` en la carpeta temporal, no en el repo):
+  - La geometría real del sector, leída cada 0.05° entre −15° y 105° a través de un 74HC165 simulado con `prueba_encoder.py`, da el código correcto, con un error máximo de 1°.
+  - La referencia nunca queda tapada.
+  - Se detectan los fallos de cable y de LED.
+  - Nada choca entre los topes.
+  - **Falta todo con piezas reales.**
+- **Pendiente:**
+  - Medidas de la bisagra para los soportes de la camilla: eje, espacio libre de unos 75 mm de radio, tubos, juego lateral, ángulos reales y fotos.
+  - Calibrar `CERO` y `SENTIDO`.
+  - Integrarlo a `esp32/main.py`, al protocolo (enviar el ángulo), al servidor y a la página.
+  - Pasar `CONFIG`/`LIMITES` de Piernas a 0–90.
+- **Si se cambian `BITS`, `GRADOS_POR_CODIGO` o `ANGULO_INICIO`**, hay que cambiarlos igual en `generar_piezas.py` y en `prueba_encoder.py`, y regenerar los STL.
+
+### Sensores de ángulo (conversación del 10-11)
+
+Es para mostrar grados reales, para que "Ir a" y "Plano 0°" muevan de verdad, y para límites por software que protejan la estructura. Hoy el tope interno solo protege al actuador. Cambiaría el firmware (leer y enviar el ángulo), el servidor y la página. Está en lo que el usuario dejó para después: **no se ha tocado código**.
+
+**Qué se necesita medir**
+
+- Cabeza va de −30° a 70° (100° en total) y Piernas de 0° a 45° (`web/publico/js/config.js`).
+- Ninguna da una vuelta completa, así que basta un sensor de menos de una vuelta, montado en la bisagra de cada sección. Va uno por sección, no por actuador, así que no detecta si los dos actuadores se desincronizan.
+- **Precisión:** para un fisioterapeuta alcanzan unos ±2–3°. Pesa más que la misma posición se repita en cada sesión que el número exacto.
+  - Posiciones habituales de Cabeza: semi-Fowler 30–45°, Fowler 45–60°, Fowler alta 60° o más, y Trendelenburg de −10° a −30°.
+  - Piernas se elevan entre 15° y 45°.
+  - La medición con goniómetro ya tiene unos ±5° de error.
+  - Hay que confirmarlo con un fisio del centro: qué ángulos usa, si importa el número exacto o repetir la posición, y si quiere posiciones guardadas.
+  - La página muestra pasos de 1° y el objetivo original decía ±1°. Si ±2° basta, conviene cambiar ese texto.
+- **Lo que decide el sensor no es la precisión.** Decide que sepa la posición al arrancar (el ESP32 se reinicia al abrir el puerto, por el watchdog o si se va la luz), que detecte un cable cortado y que dure.
+
+**Opciones vistas**
+
+1. **Potenciómetro de 360° sin tope, de plástico conductivo (WDD35D4, 5k o 10k): recomendado para el final.**
+   - Sabe la posición siempre y dura millones de ciclos.
+   - No tiene tope, así que no se rompe si la bisagra se pasa.
+   - Usa 3 cables.
+2. **Potenciómetro B10K (el usuario tiene): sirve para probar.** Se conecta igual que el WDD35D4, así que el código servirá para los dos.
+   - Ventajas:
+     - Sabe la posición siempre.
+     - Es simple.
+     - Da ±1° fácil: unos 13–15 pasos del ADC por grado.
+   - Desventajas:
+     - Pista de carbón de unos 10 000 ciclos, así que dura meses.
+     - Tiene tope mecánico, por lo que hay que montarlo centrado.
+     - Con el desgaste "rasca" y hay que filtrar la lectura.
+     - Su eje no aguanta esfuerzo de lado y necesita acople.
+     - No es sellado.
+   - **Conexión:**
+     - Un extremo a **3.3 V, nunca 5 V**, y el otro extremo a GND.
+     - El centro al GPIO 34 para Cabeza o al GPIO 35 para Piernas.
+     - Un capacitor de 100 nF y una resistencia de 1 MΩ, los dos del centro a GND, cerca del ESP32.
+     - Cable trenzado o apantallado, con la malla a GND solo del lado del ESP32.
+   - **Montaje:** la sección a mitad de rango (Cabeza a unos 20°) con el potenciómetro a mitad de giro (unos 1.65 V), y el eje alineado con la bisagra mediante un acople.
+   - **Calibración:** 2 o 3 puntos medidos con el inclinómetro del celular.
+   - **Seguridad:** el rango normal nunca llega a 0 V ni a 3.3 V. Si la lectura llega ahí, es un cable cortado o un corto, y el motor debe parar.
+3. **AS5600 magnético:**
+   - Ventaja: no tiene contacto, así que no se gasta.
+   - Exige que el imán quede centrado a 0.5–3 mm del sensor.
+   - Usar la salida analógica OUT: por I2C los dos sensores tienen la misma dirección (0x36).
+   - El pin DIR va a GND.
+4. **MPU6050 (acelerómetro):**
+   - Ventaja: mide la inclinación respecto a la gravedad y no necesita eje.
+   - Desventaja: usa I2C con un cable largo junto a los motores, y ya hubo ruido en el USB. Es arriesgado.
+5. **HW-040 (encoder mecánico tipo KY-040; el usuario tiene): solo para practicar.**
+   - Ventajas:
+     - Gira sin tope.
+     - Es digital, sin el ADC.
+   - Desventajas:
+     - Es incremental, así que pierde la posición en cada reinicio y hay que llevar la sección al tope (unos 30 s en Cabeza).
+     - Da 18° por paso, o unos 4.5° contando todos los flancos.
+     - Rebota y pierde pasos con ruido.
+     - No detecta un cable cortado.
+     - Se gasta (15 000–30 000 giros).
+     - Su código es más complejo.
+   - Si se usa: + a 3.3 V, CLK al GPIO 34 y DT al GPIO 35 (el módulo trae pull-ups). Para Piernas, GPIO 36 y 39.
+   - **Guardar la posición por código:**
+     - Se guardaría en la Raspberry, que no se reinicia con el ESP32, y solo con el motor quieto.
+     - Los actuadores no se mueven a mano, por el engranaje sin fin.
+     - Resuelve el reinicio al abrir el puerto.
+     - No resuelve:
+       - Los pasos perdidos, porque se guardaría el valor ya equivocado.
+       - Un corte en movimiento.
+       - Que nadie puede verificar si el número está bien, y eso es riesgo con paciente.
+       - La resolución.
+     - Parches posibles:
+       - Marcar la posición como dudosa si hubo un reinicio en marcha.
+       - Recalibrar en el tope cuando el motor anda y el encoder no cuenta.
+       - Usar engranajes.
+6. **Encoder óptico diseñado por el usuario (pregunta abierta):**
+   - **Incremental** (disco con ranuras y 2 sensores en cuadratura):
+     - Ventajas sobre el HW-040: no rebota ni se gasta, y la resolución es libre.
+     - Pero pierde la posición igual y no detecta fallas.
+     - Se puede agregar una ranura de referencia a mitad del recorrido, para ubicarse con un movimiento corto.
+     - No vale la pena.
+   - **Absoluto en código Gray: buena opción si el proyecto valora el diseño propio.**
+     - Sabe la posición siempre.
+     - En código Gray cambia un solo bit por paso.
+     - Detecta fallas por saltos imposibles.
+     - Necesita 6 pistas y 6 sensores para ±2° (100° / 2° son 50 posiciones), o 7 para 1°.
+   - **Diseño:**
+     - Un sector de radio grande en vez de un disco completo. Con 100 mm de radio, 1° equivale a 1.75 mm de arco.
+     - Sensores de horquilla (H21A1 o módulos LM393), no reflectivos TCRT5000, que fallan con luz ambiente y suciedad.
+     - Caja cerrada contra polvo, luz y alcohol.
+     - Alimentación a 3.3 V, o un divisor en las salidas si van a 5 V.
+     - Un **74HC165** para leer los 6 bits con 3 pines, encadenable entre las dos secciones. Mejor que un expansor I2C.
+   - Desventajas frente al WDD35D4: tiempo de diseño, precisión mecánica, y más cables y piezas.
+
+**Recomendación dada:**
+- Para probar ya, el B10K.
+- Para el final, el WDD35D4, o el óptico absoluto en código Gray si se quiere diseño propio.
+- No usar algo incremental (HW-040 u óptico incremental) con pacientes.
 
 ## Documentación pendiente
 
@@ -343,6 +488,7 @@ Falta un paro físico que corte la energía de los motores sin depender de ningu
 - Plan general de integración: https://claude.ai/artifact/6Yo3eoRURGcjXuc5KChWrS
 - Cableado con relés, fusibles y TVS (presentación): https://claude.ai/artifact/1Gk6CeN5LLnTMpQpNV2bqg
 - Cableado final con BTS7960: https://claude.ai/artifact/BPPDzhjXEg8qiHQrK63hmF
+- Encoder de piernas (banco de prueba, paso a paso): https://claude.ai/artifact/MAu8PJ5JfVQvSUGJZH4XQU
 
 Son privadas de la cuenta del usuario.
 
@@ -359,6 +505,8 @@ Son privadas de la cuenta del usuario.
 - **Antes de concluir que la Raspberry se reinició sola, preguntar si la reinició el usuario.** El 09-11 eso llevó a dos conclusiones equivocadas.
 - Ante algo raro, pedir que no reinicie ni desconecte hasta capturar `uptime -s`, `get_throttled` y `journalctl`.
 - Para probar sin tocar el repo: copiar `web/` y `esp32/` a una carpeta temporal, sin `camilla.db`. El firmware corre en CPython con módulos falsos `machine` y `time`; `hardware.serial` se reemplaza por un puerto falso conectado a él. Los scripts (`falsos.py` con `PWM` falso, `probar_esp32.py`, `probar_panel.py`, `probar_reabrir.py` y `probar_puente.py`) estaban en una carpeta temporal y no están en el repo. `probar_esp32.py` y `probar_reabrir.py` esperan `MODULO = "reles"`.
+- **Piernas (11-11):** `probar_puente_piernas.py`, `probar_panel_piernas.py` (Chrome real; guion `e3.js`; con `PYTHONIOENCODING=utf-8` en Windows) y la copia `copia_piernas/` están en la carpeta temporal.
+- **Encoder:** está en la rama `backup-cambios-esp32`. `encoder/generar_piezas.py` usa `manifold3d` (instalado en un venv de la carpeta temporal). El 11-11 no se pudo ejecutar OpenSCAD descargado: el clasificador lo bloqueó. Las imágenes de la guía salen de un renderizador propio en numpy (`render.py`, en la carpeta temporal).
 
 **Trampas del código**
 

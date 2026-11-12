@@ -1,17 +1,17 @@
 """Programa del ESP32 de la camilla (MicroPython).
 
 Se guarda en la placa como main.py con Thonny y arranca solo al recibir energia.
-Recibe las ordenes de la Raspberry por el cable USB y mueve el puente H
-(L298N o BTS7960) o, con MODULO = "reles", el modulo de 4 reles.
+Recibe las ordenes de la Raspberry por el cable USB y mueve las piernas con un
+puente H BTS7960 (o L298N) o, con MODULO = "reles", la cabeza con el modulo de 4 reles.
 
 Ordenes que recibe, una por linea, terminadas en *XX (comprobacion en hexadecimal):
-    M cabeza 1     mover la seccion: 1 extiende, -1 retrae. Se debe repetir cada 200 ms
-    S cabeza       detener esa seccion
+    M piernas 1    mover la seccion: 1 extiende, -1 retrae. Se debe repetir cada 200 ms
+    S piernas      detener esa seccion
     X              detener todo
     P              la Raspberry sigue conectada
 
 A cada orden valida responde:
-    E cabeza=detenido*XX
+    E piernas=detenido*XX
 
 Seguridad:
     - Una seccion se detiene sola si pasan LIMITE_SIN_ORDEN_MS sin recibir su M.
@@ -26,9 +26,9 @@ import machine
 from machine import PWM, Pin
 
 # ---------- CONFIGURACION ----------
-MODULO = "puente"           # "puente": L298N o BTS7960 | "reles": modulo de 4 reles
-PIN_EXTENDER = 25           # puente H: IN1 del L298N o RPWM del BTS7960
-PIN_RETRAER = 26            # puente H: IN2 del L298N o LPWM del BTS7960
+MODULO = "puente"           # "puente": piernas con BTS7960 o L298N | "reles": cabeza con 4 reles
+PIN_EXTENDER = 26           # puente H: RPWM del BTS7960 o IN1 del L298N
+PIN_RETRAER = 27            # puente H: LPWM del BTS7960 o IN2 del L298N
 PIN_HABILITAR = None        # puente H: ENA o R_EN+L_EN; None si van con jumper o a 3.3 V
 VELOCIDAD = 100             # puente H: potencia en % (0 a 100)
 FRECUENCIA_PWM = 1000       # puente H: Hz
@@ -145,14 +145,14 @@ class Seccion:
 
 
 # Una entrada por seccion. Los nombres deben ser los de la pagina: altura, cabeza, piernas.
-# Con puente H, los dos actuadores de cabeza van en paralelo en el mismo canal.
+# Con puente H, los dos actuadores de piernas van en paralelo en el mismo BTS7960.
 if MODULO == "reles":
     SECCIONES = {
         "cabeza": Seccion([ParReles(26, 27), ParReles(25, 33)]),
     }
 else:
     SECCIONES = {
-        "cabeza": Seccion([PuenteH(PIN_EXTENDER, PIN_RETRAER, PIN_HABILITAR)]),
+        "piernas": Seccion([PuenteH(PIN_EXTENDER, PIN_RETRAER, PIN_HABILITAR)]),
     }
 
 
