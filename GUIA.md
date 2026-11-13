@@ -371,6 +371,25 @@ El portal cautivo es lo que hace que la página se abra sola al conectarse, como
 
 Cada apagado agrega a `~/reporte_red.txt` la hora de inicio, la red anterior, los dispositivos conectados al final y los mensajes de `hostapd`, `dnsmasq`, `dnsmasq-dhcp`, `kernel` y `python3`.
 
+### 8.6 Arranque automático
+
+Con el arranque automático, la red Camilla y la página se encienden solas al prender la Raspberry, sin iniciar sesión ni escribir claves. Si alguna se cae, se vuelve a encender en unos segundos.
+
+| Tarea | Comando, desde la carpeta `red/` |
+|---|---|
+| Instalar (una vez, después de `sudo ./instalar_red.sh`) | `sudo ./instalar_arranque.sh` y luego `sudo reboot` |
+| Ver si están encendidas | `systemctl status camilla-red camilla-pagina` |
+| Ver los mensajes de la página en vivo | `journalctl -u camilla-pagina -f` |
+| Reiniciar la página (por ejemplo, después de `git pull`) | `sudo systemctl restart camilla-pagina` |
+| Apagar todo un rato para tener internet | `sudo systemctl stop camilla-pagina camilla-red` |
+| Volver a encender | `sudo systemctl start camilla-red camilla-pagina` |
+| Quitar el arranque automático | `sudo ./instalar_arranque.sh quitar` |
+
+- Son dos servicios de systemd: `camilla-red` (como root: `hostapd`, `dnsmasq` y la redirección del puerto 80) y `camilla-pagina` (`web/servidor.py` con el usuario que instaló, en el grupo `dialout` para el ESP32).
+- La instalación no los enciende en el momento, para no cortar internet ni una conexión SSH por WiFi. Se encienden al reiniciar.
+- Con el arranque automático activo, `./encender_red.sh` solo avisa que ya está todo encendido.
+- Si la carpeta del proyecto se mueve, hay que volver a correr `sudo ./instalar_arranque.sh`.
+
 ## 9. Datos y seguridad
 
 | Tema | Implementación |
