@@ -49,7 +49,9 @@ function pintarRiel(seccion) {
 function pintarTopeAltura() {
   const c = CONFIG.altura;
   const altura = panel.valor.altura;
-  if (altura >= c.max) {
+  if (c.sinTope) {
+    el.topeAltura.classList.add('d-none');   // la estimacion no sabe donde esta el motor real
+  } else if (altura >= c.max) {
     el.topeAltura.classList.remove('d-none');
     el.topeAltura.textContent = 'En el tope superior';
   } else if (altura <= c.min) {

@@ -7,7 +7,7 @@
    dibujo y la barra; nunca se muestra como numero. */
 export const CONFIG = {
   altura:  { min: 0, max: 100, ref: 0, paso: 2, numerica: false, continua: true,
-             etiqueta: 'Altura' },
+             sinTope: true, etiqueta: 'Altura' },
   /* continua: el motor corre mientras se mantiene el boton. sinTope: su final de
      recorrido no lo decide la estimacion de la pagina. */
   cabeza:  { min: -30, max: 70, ref: 0, paso: 1, numerica: true, unidad: '°',

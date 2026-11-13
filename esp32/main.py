@@ -2,8 +2,12 @@
 
 Se guarda en la placa como main.py con Thonny y arranca solo al recibir energia.
 Recibe las ordenes de la Raspberry por el cable USB y mueve las piernas con un
-puente H BTS7960 y la cabeza con un L298N. Con MODULO = "reles", solo la cabeza,
-con el modulo de 4 reles.
+puente H BTS7960, la cabeza con un L298N y la altura con un motor paso a paso
+(NEMA 17 con driver DRV8825). Con MODULO = "reles", solo la cabeza, con el
+modulo de 4 reles.
+
+Altura (DRV8825): GPIO 25 -> STP, GPIO 33 -> DIR, GPIO 13 -> EN, RST+SLP a 3.3 V,
+GND comun. La conexion completa esta al inicio de prueba_stepper.py.
 
 Ordenes que recibe, una por linea, terminadas en *XX (comprobacion en hexadecimal):
     M piernas 1    mover la seccion: 1 extiende, -1 retrae. Se debe repetir cada 200 ms
@@ -35,6 +39,15 @@ CABEZA_EXTENDER = 18        # cabeza, L298N: IN1 (ENA con su jumper)
 CABEZA_RETRAER = 19         # cabeza, L298N: IN2
 VELOCIDAD = 100             # puente H: potencia en % (0 a 100)
 FRECUENCIA_PWM = 1000       # puente H: Hz
+ALTURA_STEPPER = True       # altura con motor paso a paso; False si no esta conectado
+ALTURA_STEP = 25            # altura, DRV8825: STP (cada pulso es un paso)
+ALTURA_DIR = 33             # altura, DRV8825: DIR
+ALTURA_EN = 13              # altura, DRV8825: EN (0 = con fuerza, 1 = suelto)
+SUBIR_CON_DIR = 1           # altura: si "Subir" baja, cambiar a 0
+PASOS_VELOCIDAD = 400       # altura: pasos por segundo a toda velocidad
+PASOS_INICIO = 100          # altura: arranca despacio para no saltarse pasos con carga
+PASOS_ACELERACION = 800     # altura: cuanto sube la velocidad cada segundo (pasos/s)
+MANTENER_FUERZA = True      # altura: detenido, el motor sigue sujetando (se calienta)
 ACTIVO_BAJO = True          # reles: True si el modulo se activa con 0
 PAUSA_CAMBIO_MS = 300       # pausa entre apagar un motor y volver a arrancarlo
 LIMITE_SIN_ORDEN_MS = 500   # sin ordenes durante este tiempo, la seccion se detiene
@@ -73,15 +86,57 @@ class ParReles:
         poner_rele(self.a if cual == "a" else self.b, True)
 
 
-def salida_pwm(numero):
+def salida_pwm(numero, frecuencia=FRECUENCIA_PWM):
     """Salida PWM que empieza apagada (algunas versiones arrancan el PWM a medias)."""
     pin = Pin(numero, Pin.OUT, value=0)
     try:
-        pwm = PWM(pin, freq=FRECUENCIA_PWM, duty_u16=0)
+        pwm = PWM(pin, freq=frecuencia, duty_u16=0)
     except TypeError:
-        pwm = PWM(pin, freq=FRECUENCIA_PWM)
+        pwm = PWM(pin, freq=frecuencia)
     pwm.duty_u16(0)
     return pwm
+
+
+class Stepper:
+    """Motor paso a paso con DRV8825. El PWM en STEP da los pulsos solo (uno por paso):
+    su frecuencia es la velocidad. "a" sube y "b" baja. Arranca despacio y acelera."""
+
+    def __init__(self, pin_step, pin_dir, pin_en):
+        self.step = salida_pwm(pin_step, PASOS_INICIO)
+        self.dir = Pin(pin_dir, Pin.OUT, value=0)
+        self.en = Pin(pin_en, Pin.OUT, value=0 if MANTENER_FUERZA else 1)
+        self.velocidad = 0
+        self.desde = 0
+
+    def poner_velocidad(self, pasos):
+        if pasos == FRECUENCIA_PWM:
+            pasos += 1      # con la misma frecuencia compartiria reloj con los puentes H
+        self.velocidad = pasos
+        self.step.freq(pasos)
+        self.step.duty_u16(32768)
+
+    def detener(self):
+        self.step.duty_u16(0)
+        self.velocidad = 0
+        if not MANTENER_FUERZA:
+            self.en.value(1)
+
+    def encender(self, cual):
+        self.detener()
+        self.dir.value(SUBIR_CON_DIR if cual == "a" else 1 - SUBIR_CON_DIR)
+        self.en.value(0)
+        time.sleep_ms(1)    # el driver necesita un momento tras cambiar DIR o EN
+        self.desde = time.ticks_ms()
+        self.poner_velocidad(min(PASOS_INICIO, PASOS_VELOCIDAD))
+
+    def actualizar(self, ahora):
+        """Rampa: sube la velocidad poco a poco hasta PASOS_VELOCIDAD."""
+        if self.velocidad == 0 or self.velocidad >= PASOS_VELOCIDAD:
+            return
+        segundos = time.ticks_diff(ahora, self.desde) / 1000
+        pasos = min(PASOS_VELOCIDAD, int(PASOS_INICIO + PASOS_ACELERACION * segundos))
+        if pasos - self.velocidad >= 10 or pasos == PASOS_VELOCIDAD:
+            self.poner_velocidad(pasos)
 
 
 class PuenteH:
@@ -145,6 +200,10 @@ class Seccion:
             for par in self.pares:      # arrancan juntos
                 par.encender(self.pedido)
             self.marcha = self.pedido
+        elif self.marcha is not None:
+            for par in self.pares:      # el stepper acelera mientras sigue en marcha
+                if hasattr(par, "actualizar"):
+                    par.actualizar(ahora)
 
 
 # Una entrada por seccion. Los nombres deben ser los de la pagina: altura, cabeza, piernas.
@@ -159,6 +218,11 @@ else:
         "piernas": Seccion([PuenteH(PIN_EXTENDER, PIN_RETRAER, PIN_HABILITAR)]),
         "cabeza": Seccion([PuenteH(CABEZA_EXTENDER, CABEZA_RETRAER)]),
     }
+    if ALTURA_STEPPER:
+        try:
+            SECCIONES["altura"] = Seccion([Stepper(ALTURA_STEP, ALTURA_DIR, ALTURA_EN)])
+        except Exception as error:      # sin altura, cabeza y piernas siguen funcionando
+            print("# altura desactivada:", error)
 
 
 def detener_todo():
