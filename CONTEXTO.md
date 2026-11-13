@@ -1,6 +1,6 @@
 # Contexto del proyecto
 
-**Fecha:** 09-11-2026, con agregados del 10-11 y del 11-11-2026. Resumen para retomar el trabajo desde cero: qué se busca, cómo está todo y qué sigue. El detalle del sistema está en `GUIA.md` e `INTEGRACION.md`, pero esas dos **todavía no incluyen la integración del ESP32** (ver "Documentación pendiente").
+**Fecha:** 09-11-2026, con agregados del 10-11, 11-11 y 12-11-2026. Resumen para retomar el trabajo desde cero: qué se busca, cómo está todo y qué sigue. El detalle del sistema está en `GUIA.md` e `INTEGRACION.md`, pero esas dos **todavía no incluyen la integración del ESP32** (ver "Documentación pendiente").
 
 ## Dónde quedamos
 
@@ -12,7 +12,9 @@
 - **11-11, después:** mientras llega otro BTS7960, Cabeza va en un **L298N** (el rojo) con **1 solo actuador**, porque falta que llegue el otro. Se usan los pines del nuevo código del compañero (`compi.txt`): **GPIO 18 → IN1 (extender) y GPIO 19 → IN2 (retraer)**, con ENA en su jumper. `esp32/main.py` ahora tiene las dos secciones en modo `puente` (`CABEZA_EXTENDER` y `CABEZA_RETRAER`). Probado en simulación sin fallas (`probar_dos_puentes.py` y `probar_panel_dos.py`). **Sin commit, por pedido del usuario**: no subir nada sin que lo pida explícitamente. Se lleva a la Raspberry cuando el usuario decida (git, Thonny o scp).
 - **10-11: se habló de sensores de ángulo para Cabeza y Piernas.** Ver "Propuestas → Sensores de ángulo".
 - **11-11: el usuario eligió un encoder óptico absoluto en código Gray para Piernas, de 0° a 90°**, con LED y fototransistores sueltos que arma él, e impreso en 3D por un compañero. El usuario lo movió a la **rama local `backup-cambios-esp32`** (commit `ce2474a`, carpeta `encoder/`). Ese commit también guarda `codigoesp32.txt` con la clave del WiFi: **no subir esa rama así**; para publicar el encoder, armar una rama sin ese archivo. Primero se arma un **banco de prueba** que se gira a mano. Guía visual: https://claude.ai/artifact/MAu8PJ5JfVQvSUGJZH4XQU. Ver "Encoder de piernas".
-- Rama `esp32-conexion`, en GitHub en `fa1a602`. En el PC la rama sigue enlazada a `origin/optimizaciones-esp32`, así que hay que subir con `git push origin esp32-conexion`.
+- Rama `esp32-conexion`, en GitHub en `554e381`. En el PC la rama sigue enlazada a `origin/optimizaciones-esp32`, así que hay que subir con `git push origin esp32-conexion`.
+- **12-11: registros de pacientes completos**, en `master` y `esp32-conexion` (commit `554e381`). Campos opcionales: nombres, apellidos, sexo, nacimiento, DPI, carné, teléfono, correo, contacto de emergencia, estatura (m), peso (lb), fisioterapeuta, diagnóstico, dolor EVA 0-10, próxima cita (AM/PM) y notas. DPI y teléfonos con máscara de solo números. Tabla a lo ancho con buscador, formulario en panel lateral con "¿Descartar cambios?" y ficha de solo lectura. La base vieja se migra sola al arrancar. `web/datos_prueba.py` agrega o borra 20 pacientes inventados. `master` quedó igual a `esp32-conexion`.
+- **12-11: rama `muestra-citein`** (desde `master`, en GitHub en `7fe11c1`) **para la presentación del 13-11.** La pestaña Control ya no muestra grados: Cabeza y Piernas dicen SUBIENDO / BAJANDO / EN REPOSO. Sin riel de grados, "Destino", "Ir a", `+1°`/`-1°` ni el botón "Plano 0°". El diagrama anima en bucle la sección que se mueve mientras se mantiene el botón; al soltar queda arriba si subió o recta si bajó (solo dibujo, no hay sensor). La altura quedó como estaba. El servidor y `esp32/main.py` no cambiaron: el firmware sigue como el 11-11 (BTS7960 de Piernas en 26 y 27, L298N de Cabeza en 18 y 19).
 
 **Siguiente, en orden:**
 
@@ -343,7 +345,18 @@ Falta un paro físico que corte la energía de los motores sin depender de ningu
 
 **Arranque automático:** servicios systemd para red y página, `wlan0` fijo, watchdog de la Pi, microSD protegida, reloj DS3231, dos administradores y una hoja junto a la camilla para reiniciar. Hoy `encender_red.sh` es manual y espera ENTER.
 
-**WebSocket:** `aiohttp` en el mismo puerto (`apt install python3-aiohttp`). Pasa de hilos a asyncio. En la página cambian `api/sondeo.js` y `api/ordenes.js`. Mantener `POST /api/paro` como segunda vía.
+### FastAPI y WebSocket (conversación del 12-11)
+
+**Decisión:** no tocar nada antes de la presentación del 13-11. Retomarlo después.
+
+- **No son alternativas entre sí.** FastAPI es el framework del servidor y WebSocket es la forma de comunicación. FastAPI también maneja WebSocket.
+- **Cómo es hoy:** `http.server` de la biblioteca estándar, sin dependencias, lo que es una ventaja en una Raspberry sin internet. Cada página consulta `/api/estado` una vez por segundo. El hombre muerto repite `mover` cada 400 ms y el servidor corta el motor tras 1 s sin noticias. El paro va directo y corta al instante.
+- **FastAPI aportaría:** validación automática, documentación de la API y código más ordenado. **Cuesta:** instalar paquetes (`fastapi`, `uvicorn`) con internet al menos una vez y reescribir `servidor.py` (unas 480 líneas), con las sesiones y el control. Es una mejora de comodidad, no de funcionamiento.
+- **WebSocket aportaría:** avisos al instante a todas las pantallas (paro, solicitud de control, cambio de titular), que hoy llegan con hasta 1 s de retraso, y menos tráfico en el WiFi. **Cuesta:** manejar reconexiones. El hombre muerto igual necesita un latido, porque si el WiFi se cae la conexión no siempre avisa enseguida: la seguridad casi no mejora, lo que mejora es la experiencia.
+- **Recomendación:**
+  1. Si se mejora, empezar por WebSocket solo para avisos (estado, paro y solicitudes de control) y dejar el resto igual.
+  2. FastAPI solo si el proyecto crece (más pantallas, más API o más gente programando). En ese caso, hacerlo junto con WebSocket, para reescribir una sola vez.
+- **Opción sin FastAPI:** `aiohttp` en el mismo puerto (`apt install python3-aiohttp`). Pasa de hilos a asyncio. En la página cambian `api/sondeo.js` y `api/ordenes.js`. Mantener `POST /api/paro` como segunda vía.
 
 **Hardware final, además del BTS7960:** paro de hongo con contactor que corte la fuente de motores. Pines ocupados o reservados (11-11): Piernas 26 y 27; Cabeza 18 y 19; encoder 32, 23 y 34. Para la altura, otro BTS7960 en pines que no choquen con esos (por ejemplo, 25 y 33). Dejar 35, 36 y 39 para sensores; del 34 al 39 son solo de entrada. Evitar 0, 2, 5, 12 y 15, que son pines de arranque. Más adelante, R_IS y L_IS podrían detectar un atasco, con divisor a 3.3 V.
 
@@ -517,6 +530,7 @@ Son privadas de la cuenta del usuario.
 - `encender_red.sh` filtra el texto de `anotar()` y la línea `"GET / `: cambiar esas frases rompe su monitor.
 - `CONFIG.altura.numerica = true` rompe la página con un `TypeError`.
 - `LIMITES` y `CONFIG` (`publico/js/config.js`) se cambian juntos, igual que la validación de `basedatos.py`, `ui/formularios.js` y `vistas/acceso.js`.
+- En `muestra-citein` ya no existen los id de grados (`valCabeza`, `objCabeza`, `campoCabeza`, `irCabeza`, `minCabeza`, `btnPlano`...). El estado de Cabeza y Piernas va en `movCabeza` / `txtMovCabeza` (y lo mismo para Piernas). La animación del diagrama está en `ui/dibujo.js` (`RECORRIDO`, `BUCLE_MS`, `FINAL`).
 - `continua` hace que una sección use `mover`, y la telemetría ya no la toca. `sinTope` evita que la página corte el movimiento por su estimación y que deshabilite el botón pulsado.
 - Si se deshabilita un botón mientras se mantiene pulsado, puede no llegar el `pointerup`.
 - `esp32/main.py` manda en qué secciones existen: las informa en cada línea `E`.
