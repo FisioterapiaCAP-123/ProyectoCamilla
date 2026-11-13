@@ -87,7 +87,9 @@ Funciones disponibles:
 ├── .gitignore
 ├── red/
 │   ├── instalar_red.sh         Instala hostapd y crea la configuración de la red
-│   └── encender_red.sh         Enciende y apaga la red y la página
+│   ├── encender_red.sh         Enciende y apaga la red y la página a mano
+│   ├── instalar_arranque.sh    Instala o quita el arranque automático (servicios de systemd)
+│   └── arranque_red.sh         Red para el arranque automático; lo usa el servicio camilla-red
 └── web/
     ├── servidor.py             Servidor web y reglas del control
     ├── paginas.py              Compone el HTML y entrega los archivos públicos
@@ -164,7 +166,15 @@ El script instala `hostapd`, pide la clave de la red (mínimo 8 caracteres) y cr
 
 3. Si esa persona tenía la página abierta, debe salir y volver a entrar para ver las pestañas **Registros** y **Usuarios**.
 
-La instalación no crea servicios: nada arranca solo al encender la Raspberry.
+**Paso 5 (opcional). Arranque automático.** Para que la red y la página se enciendan solas al prender la Raspberry, sin iniciar sesión ni escribir claves:
+
+```bash
+cd ~/Desktop/"Proyecto Camilla"/red
+sudo ./instalar_arranque.sh
+sudo reboot
+```
+
+Ver [Arranque automático](#86-arranque-automático). Sin este paso, nada arranca solo: la red y la página se encienden a mano con `encender_red.sh`.
 
 ## 6. Operación
 
@@ -180,6 +190,8 @@ El script se ejecuta sin `sudo` delante y pide la contraseña de `sudo` solo par
 Para entrar, se conecta el celular a la red **Camilla**. La página se abre sola; si no ocurre, se escribe `http://10.42.0.1` en el navegador.
 
 Mientras la red está encendida, la Raspberry se queda sin internet porque usa su única interfaz WiFi para crear la red.
+
+Con el [arranque automático](#86-arranque-automático) instalado no hace falta este script: la red y la página ya están encendidas, y `encender_red.sh` solo lo avisa.
 
 ### 6.2 Apagar la red y la página
 
@@ -418,8 +430,9 @@ La lista completa está en [INTEGRACION.md](INTEGRACION.md#11-comportamientos-a-
 | Archivo modificado | Qué hacer |
 |---|---|
 | `web/plantillas/`, `web/publico/` | Guardar y recargar la página en el navegador. No hace falta reiniciar. |
-| `web/servidor.py` | Reiniciar la página: ENTER y otra vez `./encender_red.sh`, o **Ctrl+C** y otra vez `python3 web/servidor.py`. |
+| `web/servidor.py` | Reiniciar la página: ENTER y otra vez `./encender_red.sh`, o **Ctrl+C** y otra vez `python3 web/servidor.py`. Con el arranque automático: `sudo systemctl restart camilla-pagina`. |
 | `web/paginas.py`, `web/basedatos.py` | Igual que `web/servidor.py`. |
+| `red/arranque_red.sh` (con el arranque automático) | `sudo ./instalar_arranque.sh` otra vez y `sudo systemctl restart camilla-red`: el servicio usa una copia en `/usr/local/sbin/camilla-red`. |
 | Roles o contraseñas desde la terminal | No hay que reiniciar. Quien tenga la página abierta debe salir y volver a entrar para ver su rol nuevo. |
 
 - Los archivos de la página se leen cada vez que alguien la abre.
@@ -435,6 +448,8 @@ La lista completa está en [INTEGRACION.md](INTEGRACION.md#11-comportamientos-a-
 | `Primero instala la red con: sudo ./instalar_red.sh` | No existe la configuración de la red | Ejecutar `sudo ./instalar_red.sh` |
 | `Correlo sin sudo: ./encender_red.sh` | El script se ejecutó con `sudo` delante | Ejecutarlo sin `sudo` |
 | `No se pudo encender la red` | `hostapd` no arrancó | Revisar los mensajes que muestra el script a continuación |
+| `La red y la pagina ya estan encendidas por el arranque automatico` | El arranque automático está instalado y funcionando | Nada: ya está todo encendido. Ver [Arranque automático](#86-arranque-automático) |
+| `camilla-red` o `camilla-pagina` no dicen `active (running)` | Algo falló al arrancar | Ver los mensajes con `journalctl -u camilla-red -b` o `journalctl -u camilla-pagina -b` |
 | `Aviso: no hay administrador` | Ningún perfil activo es administrador | Crear un perfil y ejecutar `python3 web/basedatos.py admin USUARIO` |
 | "Tu sesión terminó" | Se entró desde otro dispositivo, el servidor se reinició o el perfil se desactivó | Volver a iniciar sesión |
 | "Tu perfil está desactivado" | Un administrador lo desactivó | Un administrador debe activarlo en **Usuarios** |
@@ -454,6 +469,8 @@ La lista completa está en [INTEGRACION.md](INTEGRACION.md#11-comportamientos-a-
 
 **Recuperar el internet si la terminal se cerró con la red encendida**
 
+Con el arranque automático basta con `sudo systemctl stop camilla-pagina camilla-red`. Si la red se encendió con `encender_red.sh`:
+
 ```bash
 pkill -f web/servidor.py
 sudo pkill -F /run/camilla-hostapd.pid
@@ -466,6 +483,17 @@ nmcli device set wlan0 managed yes
 ## 12. Desinstalación
 
 Cada componente se puede retirar por separado. Antes de empezar se apagan la red y la página con ENTER o **Ctrl+C**.
+
+> **Importante:** hacerlo desde la pantalla de la Raspberry o por cable de red, no por SSH sobre la red Camilla: al apagarse la red se corta esa conexión.
+
+**Arranque automático.** Va primero si está instalado.
+
+```bash
+cd ~/Desktop/"Proyecto Camilla"/red
+sudo ./instalar_arranque.sh quitar
+```
+
+Apaga la red y la página, borra los servicios `camilla-red` y `camilla-pagina` y la copia `/usr/local/sbin/camilla-red`, y devuelve el WiFi a NetworkManager. La red se puede seguir encendiendo a mano con `encender_red.sh`. El usuario queda en el grupo `dialout`, que también usa Thonny para el ESP32; para sacarlo: `sudo gpasswd -d USUARIO dialout`.
 
 **Red WiFi Camilla**
 
@@ -498,7 +526,9 @@ rm -f ~/Desktop/"Proyecto Camilla"/web/camilla.db*
 rm -rf ~/Desktop/"Proyecto Camilla"
 ```
 
-El proyecto no crea servicios de systemd, reglas de `sudo` o polkit ni tareas programadas, por lo que no hay nada más que retirar.
+Fuera del arranque automático, el proyecto no crea servicios de systemd, reglas de `sudo` o polkit ni tareas programadas, por lo que no hay nada más que retirar.
+
+**Volver a instalar:** `sudo ./instalar_red.sh` (con internet; pide la clave del WiFi), luego `sudo ./instalar_arranque.sh` si se quiere el arranque automático, y `sudo reboot`.
 
 En un computador de desarrollo no se instala nada en el sistema: basta con borrar la carpeta del proyecto.
 
@@ -514,10 +544,19 @@ Cambios hechos en la Raspberry fuera de la carpeta del proyecto, según la últi
 | Configuración de la red, incluida la clave | `/etc/hostapd/camilla.conf` | `sudo rm -f /etc/hostapd/camilla.conf` |
 | Reporte de pruebas; crece con cada prueba | `~/reporte_red.txt` | `rm -f ~/reporte_red.txt` |
 
+**Solo si se instala el arranque automático** (`instalar_arranque.sh`)
+
+| Elemento | Ubicación | Cómo deshacer |
+|---|---|---|
+| Servicio de la red (como root) | `/etc/systemd/system/camilla-red.service` | `sudo ./instalar_arranque.sh quitar` |
+| Servicio de la página (con el usuario que instaló) | `/etc/systemd/system/camilla-pagina.service` | `sudo ./instalar_arranque.sh quitar` |
+| Copia del script de la red | `/usr/local/sbin/camilla-red` | `sudo ./instalar_arranque.sh quitar` |
+| Usuario en el grupo `dialout` (puerto USB del ESP32) | Grupos del sistema | `sudo gpasswd -d USUARIO dialout` |
+
 **Solo mientras la red está encendida.** El script los retira al apagar: `wlan0` fuera de NetworkManager, la IP `10.42.0.1`, los procesos `hostapd` y `dnsmasq`, la tabla `camilla` de `nft` y la página. Los archivos de PID y de concesiones están en `/run`.
 
-- Nada arranca solo al encender la Raspberry. La red y la página se encienden a mano con `encender_red.sh`.
-- No hay servicios de systemd del proyecto, reglas de `sudo` o polkit ni tareas programadas.
+- Sin el arranque automático, nada arranca solo al encender la Raspberry: la red y la página se encienden a mano con `encender_red.sh`. Con él, arrancan los dos servicios de la tabla anterior.
+- No hay reglas de `sudo` o polkit ni tareas programadas. Los únicos servicios de systemd son los del arranque automático, si se instala.
 - El panel (29-10-2026) y los perfiles con roles (05-11-2026) no cambiaron nada del sistema: todo está dentro de la carpeta del proyecto.
 - No se instaló nada más ni se cambió la red "Meso".
 
@@ -531,6 +570,7 @@ Cambios hechos en la Raspberry fuera de la carpeta del proyecto, según la últi
 | 21-10-2026 | Configuración de la red | `/etc/hostapd/camilla.conf` | Activo |
 | 21-10-2026 | Reporte de pruebas de la red | `~/reporte_red.txt` | Activo |
 | 21-10-2026 | Perfil "Camilla" de NetworkManager | `/etc/NetworkManager/system-connections/` | Borrado (no funcionaba) |
+| 12-11-2026 | Arranque automático: servicios `camilla-red` y `camilla-pagina` | `/etc/systemd/system/`, `/usr/local/sbin/camilla-red` | Disponible en `muestra-citein`; sin instalar al escribir esto |
 
 ## 14. Glosario
 
