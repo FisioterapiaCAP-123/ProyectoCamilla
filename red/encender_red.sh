@@ -15,6 +15,12 @@ INICIO=$(date '+%Y-%m-%d %H:%M:%S')
 PROYECTO=$(dirname "$(dirname "$(readlink -f "$0")")")  # carpeta "Proyecto Camilla"
 
 [ -e "$CONF" ] || { echo "Primero instala la red con:  sudo ./instalar_red.sh"; exit 1; }
+# Con el arranque automatico instalado, la red y la pagina ya corren solas
+if systemctl is-active --quiet camilla-red.service 2>/dev/null; then
+    echo "La red y la pagina ya estan encendidas por el arranque automatico."
+    echo "Ver estado:  systemctl status camilla-red camilla-pagina"
+    exit 0
+fi
 # Con sudo delante la pagina correria como root: el script pide la clave solo para lo que la necesita
 [ "$(id -u)" -ne 0 ] || { echo "Correlo sin sudo:  ./encender_red.sh"; exit 1; }
 # Sin administrador nadie puede ver los registros (se nombra con web/basedatos.py)
