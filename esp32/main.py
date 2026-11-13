@@ -44,9 +44,10 @@ ALTURA_STEP = 25            # altura, DRV8825: STP (cada pulso es un paso)
 ALTURA_DIR = 33             # altura, DRV8825: DIR
 ALTURA_EN = 13              # altura, DRV8825: EN (0 = con fuerza, 1 = suelto)
 SUBIR_CON_DIR = 1           # altura: si "Subir" baja, cambiar a 0
-PASOS_VELOCIDAD = 400       # altura: pasos por segundo a toda velocidad
-PASOS_INICIO = 100          # altura: arranca despacio para no saltarse pasos con carga
-PASOS_ACELERACION = 800     # altura: cuanto sube la velocidad cada segundo (pasos/s)
+PASOS_VELOCIDAD = 1000      # altura: pasos por segundo a toda velocidad (5 vueltas/s en paso completo,
+                            #         casi el maximo de un NEMA 17 a 12 V). Si zumba o salta pasos: 800 o 600
+PASOS_INICIO = 250          # altura: a esta velocidad arranca; mas rapido de golpe no arranca con carga
+PASOS_ACELERACION = 1500    # altura: cuanto sube la velocidad cada segundo (llega al maximo en 0.5 s)
 MANTENER_FUERZA = True      # altura: detenido, el motor sigue sujetando (se calienta)
 ACTIVO_BAJO = True          # reles: True si el modulo se activa con 0
 PAUSA_CAMBIO_MS = 300       # pausa entre apagar un motor y volver a arrancarlo
