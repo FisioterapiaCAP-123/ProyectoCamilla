@@ -19,6 +19,19 @@ export function guardarToken(token) {
   } catch (e) {}
 }
 
+const LLAVE_EQUIPO = 'llave-equipo';
+
+export function leerLlave() {
+  try { return localStorage.getItem(LLAVE_EQUIPO) || ''; } catch (e) { return ''; }
+}
+
+export function guardarLlave(llave) {
+  try {
+    if (llave) localStorage.setItem(LLAVE_EQUIPO, llave);
+    else localStorage.removeItem(LLAVE_EQUIPO);
+  } catch (e) {}
+}
+
 /* fetch con tiempo maximo: sin WiFi un fetch puede quedarse colgado minutos */
 export function pedir(ruta, opciones, ms) {
   const corte = new AbortController();

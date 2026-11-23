@@ -59,7 +59,7 @@ function conectarCampoAngulo(seccion) {
     }
     const grados = Math.round(Number(crudo));
     if (grados < c.min || grados > c.max) {
-      invalido(`Fuera de recorrido. Permitido de ${c.min}° a ${c.max}°.`);
+      invalido(`Fuera del rango permitido: de ${c.min}° a ${c.max}°.`);
       campo.select();
       return;
     }

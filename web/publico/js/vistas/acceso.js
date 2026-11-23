@@ -1,4 +1,5 @@
 /* Pantalla de acceso: iniciar sesion y crear perfil. */
+import { guardarLlave } from '../api/cliente.js';
 import { SERVIDOR } from '../api/ordenes.js';
 import { AVISO_CARACTERES, marcarCampo, ocupado, revisarClave, SOLO_LETRAS, SOLO_LETRAS_NUMEROS } from '../ui/formularios.js';
 import { porId } from '../utilidades.js';
@@ -76,8 +77,9 @@ function iniciarSesion(e) {
   alerta.classList.add('d-none');
   ocupado(btnIngresar, 'Entrando...');
 
-  SERVIDOR.login(usuario, clave).then((r) => {
+  SERVIDOR.login(usuario, clave, porId('loginRecordar').checked).then((r) => {
     ocupado(btnIngresar);
+    if (r && r.ok) guardarLlave(r.llave);   // sin "recordar" no trae llave: se borra la vieja (el servidor ya la anulo)
     if (!r || !r.ok) {
       avisoLogin((r && r.mensaje) || 'Usuario o contraseña incorrectos.', 'error');
       campoClave.value = '';
@@ -118,6 +120,7 @@ function crearPerfil(e) {
       return;
     }
     formRegistro.reset();
+    guardarLlave('');   // perfil nuevo en este equipo: no debe volver a entrar solo con el perfil de otro
     entrar(r);
   }).catch(() => {
     ocupado(btnRegistrar);

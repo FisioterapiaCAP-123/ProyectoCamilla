@@ -9,7 +9,7 @@
               <path d="M3 14h18"/><path d="M3 14 8 8"/><path d="M21 14l-5-4"/><path d="M6 14v5"/><path d="M18 14v5"/>
             </svg>
           </span>
-          <h1 class="tipo-titulo fw-bold mb-1 titulo-login">Control camilla</h1>
+          <h1 class="tipo-titulo fw-bold mb-1 titulo-login">Control Camilla</h1>
           <p class="text-uppercase fw-semibold small mb-0 subtitulo-login text-body-secondary" id="loginSubtitulo">
             Acceso al panel de operación
           </p>
@@ -26,7 +26,7 @@
             <div class="invalid-feedback" id="loginUsuarioAviso">Escribe tu usuario.</div>
           </div>
 
-          <div class="mb-4">
+          <div class="mb-3">
             <label for="loginClave" class="form-label tipo-titulo text-uppercase fw-semibold rotulo-campo">Contrase&ntilde;a</label>
             <div class="input-group input-group-lg has-validation">
               <input type="password" class="form-control" id="loginClave" name="clave"
@@ -39,6 +39,12 @@
               </button>
               <div class="invalid-feedback" id="loginClaveAviso">Escribe tu contraseña.</div>
             </div>
+          </div>
+
+          <!-- Para la tablet de control: vuelve a entrar sola (vistas/acceso.js, /api/reanudar) -->
+          <div class="form-check mb-4">
+            <input class="form-check-input" type="checkbox" id="loginRecordar">
+            <label class="form-check-label fw-semibold" for="loginRecordar">Recordar este equipo</label>
           </div>
 
           <button type="submit" class="btn btn-primary btn-lg w-100 tipo-titulo text-uppercase fw-semibold btn-accion btn-entrar"
@@ -65,7 +71,7 @@
             <label for="regUsuario" class="form-label tipo-titulo text-uppercase fw-semibold rotulo-campo">Usuario</label>
             <input type="text" class="form-control form-control-lg" id="regUsuario" maxlength="20"
                    autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Usuario" required>
-            <div class="form-text">Con él entras. De 3 a 20 caracteres: solo letras y números, sin tildes, símbolos ni espacios.</div>
+            <div class="form-text">Lo usarás para iniciar sesión. De 3 a 20 caracteres: solo letras y números, sin tildes, símbolos ni espacios.</div>
             <div class="invalid-feedback" id="regUsuarioAviso"></div>
           </div>
 
@@ -87,7 +93,7 @@
             Crear perfil
           </button>
           <p class="small text-center mt-3 mb-0 text-body-secondary">
-            Entras como fisioterapeuta. El administrador puede cambiar tu rol.
+            Tu perfil se crea con el rol de fisioterapeuta. Un administrador puede cambiarlo.
           </p>
           <p class="text-center mt-3 mb-0">
             ¿Ya tienes perfil?

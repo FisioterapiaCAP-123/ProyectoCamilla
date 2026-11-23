@@ -25,6 +25,8 @@ from contextlib import closing
 from datetime import date, datetime
 from pathlib import Path
 
+import reloj
+
 ARCHIVO = Path(__file__).parent / "camilla.db"
 VUELTAS = 300_000  # PBKDF2: ~0.4 s en la Raspberry, frena a quien intente adivinar
 ROLES = {"admin": "Administrador", "fisio": "Fisioterapeuta"}
@@ -80,6 +82,18 @@ CREATE TABLE IF NOT EXISTS pacientes (
     creado_por          TEXT NOT NULL
 )"""
 TABLAS += TABLA_PACIENTES + ";"
+# "Recordar este equipo" (la tablet de control): el equipo guarda una llave y aqui solo
+# queda su huella (sha256). Un perfil tiene a lo mas una: entrar en otro equipo la anula
+TABLAS += """
+CREATE TABLE IF NOT EXISTS llaves (
+    huella     TEXT PRIMARY KEY,
+    id_usuario INTEGER NOT NULL,
+    creada     TEXT NOT NULL,
+    usada      TEXT NOT NULL,     -- AAAA-MM-DD HH:MM: vence LLAVE_DIAS despues del ultimo uso
+    pin        TEXT,              -- PIN de 4 numeros para abrir Registros y Usuarios en ese equipo (cifrado)
+    pin_sal    TEXT
+);"""
+LLAVE_DIAS = 30
 # Columnas que llena el formulario. Nombres fijos: nunca vienen del usuario
 CAMPOS_PACIENTE = ("nombres", "apellidos", "sexo", "nacimiento", "dpi", "carne", "telefono", "correo",
                    "emergencia_nombre", "emergencia_telefono", "estatura", "peso", "fisioterapeuta",
@@ -99,6 +113,11 @@ def iniciar():
         con.executescript(TABLAS)
     with closing(abrir()) as con:
         migrar_pacientes(con)
+    with closing(abrir()) as con, con:  # llaves de antes del PIN (23-11)
+        columnas = {c["name"] for c in con.execute("PRAGMA table_info(llaves)")}
+        for columna in ("pin", "pin_sal"):
+            if columna not in columnas:
+                con.execute(f"ALTER TABLE llaves ADD COLUMN {columna} TEXT")
 
 
 def migrar_pacientes(con):
@@ -127,7 +146,7 @@ def partir_nombre(completo):
 
 
 def ahora():
-    return time.strftime("%Y-%m-%d %H:%M")
+    return reloj.texto("%Y-%m-%d %H:%M")  # hora corregida: la Raspberry no tiene reloj propio
 
 
 def cifrar(clave, sal):
@@ -161,7 +180,7 @@ def publico(fila):
 # ---------- perfiles ----------
 def revisar_clave(clave):
     if not re.fullmatch(r"[A-Za-z0-9]*", clave):  # sin tildes, ñ, simbolos ni espacios (igual en index.html)
-        return "La contraseña lleva solo letras y números, sin tildes, símbolos ni espacios."
+        return "La contraseña solo puede tener letras y números, sin tildes, símbolos ni espacios."
     if len(clave) < CLAVE_MINIMA:
         return f"La contraseña debe tener al menos {CLAVE_MINIMA} caracteres."
     if len(clave) > 100:
@@ -229,13 +248,81 @@ def cambiar_usuario(id_usuario, **campos):
         campos["clave"] = cifrar(campos["clave"], campos["sal"])
     columnas = ", ".join(f"{c} = ?" for c in campos)  # nombres fijos: los pone el servidor, no el usuario
     with closing(abrir()) as con, con:
+        if "clave" in campos or campos.get("activo") == 0:  # contrasena nueva o perfil desactivado: ningun equipo entra solo
+            con.execute("DELETE FROM llaves WHERE id_usuario = ?", (id_usuario,))
         return con.execute(f"UPDATE usuarios SET {columnas} WHERE id = ?",
                            (*campos.values(), id_usuario)).rowcount == 1
 
 
 def borrar_usuario(id_usuario):
     with closing(abrir()) as con, con:
+        con.execute("DELETE FROM llaves WHERE id_usuario = ?", (id_usuario,))
         return con.execute("DELETE FROM usuarios WHERE id = ?", (id_usuario,)).rowcount == 1
+
+
+# ---------- equipos recordados ----------
+def huella(llave):
+    return hashlib.sha256(str(llave).encode()).hexdigest()
+
+
+def crear_llave(id_usuario):
+    """Llave nueva para el equipo donde se entro. Anula las de otros equipos del mismo perfil."""
+    llave = secrets.token_urlsafe(32)
+    with closing(abrir()) as con, con:
+        con.execute("DELETE FROM llaves WHERE id_usuario = ?", (id_usuario,))
+        con.execute("INSERT INTO llaves (huella, id_usuario, creada, usada) VALUES (?, ?, ?, ?)",
+                    (huella(llave), id_usuario, ahora(), ahora()))
+    return llave
+
+
+def usar_llave(llave):
+    """El perfil de esa llave si sigue vigente y el perfil activo, si no None. Renueva el vencimiento."""
+    if not isinstance(llave, str) or not llave:
+        return None
+    with closing(abrir()) as con, con:
+        fila = con.execute("SELECT * FROM llaves WHERE huella = ?", (huella(llave),)).fetchone()
+        if fila is None:
+            return None
+        usada = leer_fecha(fila["usada"], "%Y-%m-%d %H:%M")
+        perfil = con.execute("SELECT * FROM usuarios WHERE id = ?", (fila["id_usuario"],)).fetchone()
+        if usada is None or (reloj.ahora() - usada).days >= LLAVE_DIAS or perfil is None or not perfil["activo"]:
+            con.execute("DELETE FROM llaves WHERE huella = ?", (fila["huella"],))
+            return None
+        con.execute("UPDATE llaves SET usada = ? WHERE huella = ?", (ahora(), fila["huella"]))
+    return publico(perfil)
+
+
+def borrar_llaves(id_usuario, excepto=None):
+    """Anula los equipos recordados de un perfil (menos la huella `excepto`)."""
+    with closing(abrir()) as con, con:
+        con.execute("DELETE FROM llaves WHERE id_usuario = ? AND huella IS NOT ?", (id_usuario, excepto))
+
+
+def tiene_pin(huella_llave):
+    with closing(abrir()) as con:
+        fila = con.execute("SELECT pin FROM llaves WHERE huella = ?", (huella_llave,)).fetchone()
+    return bool(fila and fila["pin"])
+
+
+def guardar_pin(huella_llave, pin):
+    """PIN nuevo para el equipo de esa llave. Devuelve False si la llave ya no existe."""
+    sal = secrets.token_hex(16)
+    with closing(abrir()) as con, con:
+        return con.execute("UPDATE llaves SET pin = ?, pin_sal = ? WHERE huella = ?",
+                           (cifrar(pin, sal), sal, huella_llave)).rowcount == 1
+
+
+def comprobar_pin(huella_llave, pin):
+    with closing(abrir()) as con:
+        fila = con.execute("SELECT pin, pin_sal FROM llaves WHERE huella = ?", (huella_llave,)).fetchone()
+    if not fila or not fila["pin"]:
+        return False
+    return hmac.compare_digest(cifrar(str(pin), fila["pin_sal"]), fila["pin"])
+
+
+def borrar_llave(huella_llave):
+    with closing(abrir()) as con, con:
+        con.execute("DELETE FROM llaves WHERE huella = ?", (huella_llave,))
 
 
 # ---------- registros de pacientes ----------
@@ -258,19 +345,19 @@ def revisar_paciente(datos):
     if campos["sexo"] and campos["sexo"] not in SEXOS:
         return None, ("sexo", "Elige femenino o masculino.")
     if campos["dpi"] and not re.fullmatch(r"\d{13}", campos["dpi"]):
-        return None, ("dpi", "El DPI tiene 13 números.")
+        return None, ("dpi", "El DPI debe tener 13 dígitos.")
     for campo in TELEFONOS:
         numero = re.sub(r"[\s-]", "", str(datos.get(campo) or ""))  # la pagina lo manda como 5555 1234
         if numero and not re.fullmatch(r"\d{8}", numero):
-            return None, (campo, "El teléfono tiene 8 números.")
+            return None, (campo, "El teléfono debe tener 8 dígitos.")
         campos[campo] = numero
     if campos["correo"] and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", campos["correo"]):
-        return None, ("correo", "Ese correo no es válido.")
+        return None, ("correo", "El correo no es válido.")
     if campos["nacimiento"]:
         nacio = leer_fecha(campos["nacimiento"], "%Y-%m-%d")
-        hoy = date.today()
+        hoy = reloj.hoy()
         if nacio is None:
-            return None, ("nacimiento", "Esa fecha no es válida.")
+            return None, ("nacimiento", "La fecha no es válida.")
         if nacio.date() > hoy:
             return None, ("nacimiento", "La fecha de nacimiento no puede ser futura.")
         if nacio.year < hoy.year - EDAD_MAXIMA:
@@ -279,7 +366,7 @@ def revisar_paciente(datos):
     if campos["proxima_cita"]:
         cita = leer_fecha(campos["proxima_cita"], "%Y-%m-%d %H:%M")
         if cita is None:
-            return None, ("proxima_cita", "Esa fecha y hora no son válidas.")
+            return None, ("proxima_cita", "La fecha y la hora no son válidas.")
         campos["proxima_cita"] = cita.strftime("%Y-%m-%d %H:%M")
     for campo, (minimo, maximo, decimales, aviso) in MEDIDAS.items():
         valor = datos.get(campo)
@@ -292,7 +379,7 @@ def revisar_paciente(datos):
         campos[campo] = round(valor, decimales) if decimales else int(valor)
     campos = {c: (v if v != "" else None) for c, v in campos.items()}
     if all(v is None for v in campos.values()):
-        return None, (None, "Llena al menos un campo.")
+        return None, (None, "Completa al menos un campo.")
     return campos, None
 
 

@@ -163,7 +163,8 @@ ESP32 -> Raspberry   E altura=detenido cabeza=extendiendo piernas=contrayendo*XX
 |---|---|---|
 | `GET /api/estado` | Opcional (`X-Sesion`) | `usuario`, `nombre`, `rol`, `control {titular, usuario}`, `paro`, `simulacion`, `hardware {conectado, secciones}`, `solicitud` (solo al titular), `respuesta` (solo a quien pidió, una vez) y `telemetria {cabeza, piernas}` (siempre 0) |
 | `GET /` y archivos | No | La página compuesta; de `publico/` solo `.css`, `.js` y `.woff2` |
-| `POST /api/login`, `/api/registro` | No | Abre una sesión. El registro crea un fisioterapeuta. |
+| `POST /api/login`, `/api/registro` | No | Abre una sesión. El registro crea un fisioterapeuta. `recordar: true` en el login devuelve además una `llave` para el equipo. Un login sin `recordar` anula las llaves de otros equipos del perfil. |
+| `POST /api/reanudar {llave}` | No | Equipo recordado: abre sesión sin contraseña. Vale 30 días desde el último uso. La anulan entrar desde otro equipo, "Salir", una contraseña nueva, desactivar o borrar el perfil. |
 | `POST /api/paro {activo}` | No | `activo: true` lo activa; cualquier otra cosa lo libera, también `{}` |
 | `POST /api/logout` | Sí | Cierra la sesión y libera el control si lo tenía |
 | `POST /api/control/tomar`, `solicitar`, `cancelar`, `responder {id, aceptar}`, `liberar` | Sí | Control |
@@ -174,6 +175,25 @@ ESP32 -> Raspberry   E altura=detenido cabeza=extendiendo piernas=contrayendo*XX
 | `POST /api/manual {tipo}` | Sí | PDF de `web/manuales/`. Con `usuario` devuelve `manual-usuario.pdf` a cualquiera con sesión; con `tecnico` devuelve `manual-tecnico.pdf` solo a un admin (otro rol: 403). Si falta el archivo avisa "todavía no está disponible". Se lee en cada descarga, así que basta reemplazar el archivo. Lo usa el botón "Manuales" del encabezado (`vistas/manuales.js`). Los PDF se suben al repo. |
 | `POST /api/usuarios/lista`, `rol`, `activo`, `clave`, `borrar` | Admin | Perfiles. El propio no se toca, así siempre queda un administrador. Desactivar o borrar cierra su sesión. |
 
+- **Tablet de control ("Recordar este equipo"):**
+  - **Llave:** la casilla del login guarda una llave en `localStorage` (`llave-equipo`). En la tabla `llaves` de `camilla.db` solo queda su huella sha256, y hay a lo más una por perfil.
+  - **Vuelve a entrar sola** con `/api/reanudar` cuando la sesión ya no existe: Android cerró la pestaña o se reinició la Raspberry.
+  - **Al despertar** (`visibilitychange`) o al reconectar, consulta en el acto y retoma el control solo si está libre (`retomarControl` en `recepcion.js`). Si otro lo tiene, se respeta y hay que pedirlo como siempre.
+  - **Sigue valiendo "un perfil, una sesión":** entrar con el mismo perfil en otro equipo saca a la tablet y anula su llave, así no rebota.
+  - **Si otro cerró la sesión** (otro equipo o pestaña, perfil desactivado o borrado), `/api/estado` trae `cerrada` con el motivo. La página lo muestra y **no** vuelve a entrar sola, porque dos pestañas con la misma llave se sacarían entre sí sin parar. Solo vuelve a entrar sola cuando el servidor no conoce el token: se reinició o venció.
+  - **PIN (`vistas/pin.js`, `/api/pin/abrir|crear|cerrar|seguir`):** en un equipo recordado de un **admin**, Registros y Usuarios se abren con un PIN de 4 números. Mover la camilla nunca lo pide.
+    - **Crear:** se crea la primera vez que se abre Registros tras entrar con contraseña. Si la sesión entró con la llave, crearlo pide también la contraseña ("¿Olvidaste el PIN?").
+    - **Dónde se guarda:** cifrado en `llaves.pin` (columnas agregadas el 23-11 con `ALTER TABLE`). Un login nuevo con "Recordar" crea llave nueva sin PIN.
+    - **Cierre:** a los 30 min sin tocar nada en esas pestañas, al apagarse la pantalla o al volver a Control. Se borran los datos de la página.
+    - **El servidor lo hace cumplir:** `abierto_hasta` en la sesión, 31 min, se renueva con cada pedido de admin y con `/api/pin/seguir`. Sin abrir, `/api/pacientes/*` y `/api/usuarios/*` responden `{ok:false, bloqueado:true}`.
+    - **Intentos:** con 5 fallos hay espera de 60 s, que se duplica en cada tanda hasta 1 h. Cuenta por equipo (`camilla.intentos_pin`), así recargar no da intentos nuevos.
+    - **Qué ve la página:** `/api/estado` trae `registros: {pin, abierto, pide_clave}`, o `null` si el equipo no usa PIN.
+  - **Lo que no cambia:** el hombre muerto, el paro y `TIEMPO_LIBERAR`.
+- **Hora (`web/reloj.py`):** la Pi no tiene internet ni pila de reloj y arranca con la hora en que se apagó.
+  - Login, registro y reanudar mandan `hora: Date.now()`. Si la diferencia pasa de 2 min, el servidor guarda un desfase (se descartan horas anteriores a 2026).
+  - Todo lo que guarda fecha usa `reloj`: `basedatos.ahora()`, la edad y la fecha del Excel, las llaves y `anotar()`.
+  - No cambia la hora del sistema, porque la página corre sin root. Las horas propias de `journalctl` siguen siendo las de la Pi. Para eso haría falta un RTC (DS3231).
+  - **Configuración de la tablet (Android):** dejarla cargando y activar "Pantalla activa mientras carga" en Opciones de desarrollador. En la red Camilla elegir "Mantener conexión" aunque no tenga internet. Quitar la optimización de batería a Chrome y fijar la app.
 - **Ficha en PDF:** no pasa por el servidor. El botón "Descargar" de la ficha copia la ficha a `#hojaImpresion` y llama a `window.print()`. Con `body.imprimiendo`, la regla `@media print` de `admin.css` deja solo esa hoja. Al terminar (`afterprint`, o al cerrar la ficha) se vacía.
 - JSON de más de 4096 bytes (64 KB en `/api/pacientes/excel`) o que no sea un objeto: 400. Sin sesión: 401. Sin rol de administrador: 403.
 - **Portal cautivo:** una petición que llega a 10.42.0.1 con otro `Host` (por ejemplo `captive.apple.com`) recibe un 302 a `http://10.42.0.1:8000/`, y el celular abre la página solo.

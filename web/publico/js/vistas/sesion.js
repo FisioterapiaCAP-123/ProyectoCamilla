@@ -1,5 +1,5 @@
 /* Entrar y salir del panel. */
-import { guardarToken } from '../api/cliente.js';
+import { guardarLlave, guardarToken, leerLlave } from '../api/cliente.js';
 import { SERVIDOR } from '../api/ordenes.js';
 import { consultar } from '../api/sondeo.js';
 import { detenerTodo } from '../camilla/movimiento.js';
@@ -13,6 +13,7 @@ import { avisoLogin, reiniciarAcceso } from './acceso.js';
 import { aplicarControl, olvidarControl, pedirControl } from './cesion.js';
 import { olvidarPacientes } from './pacientes.js';
 import { aplicarRol } from './pestanas.js';
+import { olvidarPin } from './pin.js';
 import { olvidarUsuarios } from './usuarios.js';
 
 const vistaLogin = porId('vistaLogin');
@@ -51,6 +52,7 @@ function salirDelPanel() {
   aplicarRol(null);
   olvidarPacientes();   // que no queden datos de pacientes en la pagina
   olvidarUsuarios();
+  olvidarPin();
   borrarAvisos();       // ni avisos de la sesion anterior
   olvidarControl();
   vistaPanel.hidden = true;
@@ -61,15 +63,42 @@ function salirDelPanel() {
 
 function cerrarSesion() {
   detenerTodo();
-  SERVIDOR.logout();   // el servidor libera el control si lo tenia
+  SERVIDOR.logout();   // el servidor libera el control si lo tenia, y olvida este equipo
+  guardarLlave('');
   salirDelPanel();
 }
 
-/* El servidor ya no conoce la sesion (se reinicio, entro desde otro dispositivo o lo desactivaron) */
-export function sesionTerminada() {
-  registrar('SESION VENCIDA');
+/* Equipo recordado (la tablet de control): vuelve a entrar con su llave, sin contrasena.
+   Devuelve una promesa: true si entro. Si el servidor rechaza la llave (se entro desde otro
+   equipo, Salir, contrasena nueva, perfil desactivado o 30 dias sin uso) se borra */
+export function reanudarEquipo() {
+  const llave = leerLlave();
+  if (!llave) return Promise.resolve(false);
+  registrar('EQUIPO RECORDADO: volviendo a entrar');
+  return SERVIDOR.reanudar(llave).then((r) => {
+    if (r && r.ok) {
+      entrarAlPanel(r, r.control, r.sesion);
+      return true;
+    }
+    if (r) guardarLlave('');
+    return false;
+  }, () => false);
+}
+
+/* El servidor ya no conoce la sesion.
+   cerrada: por que la cerro otro (se abrio en otro equipo o pestana, perfil desactivado o borrado).
+   Entonces no se vuelve a entrar solo: dos pestanas con la misma llave se sacarian entre si sin parar.
+   Sin motivo (se reinicio la Raspberry o vencio) un equipo recordado vuelve a entrar */
+export function sesionTerminada(cerrada) {
+  registrar('SESION VENCIDA' + (cerrada ? ': ' + cerrada : ''));
   salirDelPanel();
-  avisoLogin('Tu sesión terminó. Vuelve a iniciar sesión.', 'error');
+  if (cerrada) {
+    avisoLogin(cerrada, 'error');
+    return;
+  }
+  reanudarEquipo().then((entro) => {
+    if (!entro) avisoLogin('Tu sesión terminó. Vuelve a iniciar sesión.', 'error');
+  });
 }
 
 export function iniciarSalida() {

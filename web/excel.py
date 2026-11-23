@@ -13,6 +13,8 @@ import zipfile
 from datetime import date, datetime
 from xml.sax.saxutils import escape
 
+import reloj
+
 TIPO = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 SEXOS = {"F": "Femenino", "M": "Masculino"}
 DIA_CERO = datetime(1899, 12, 30)  # Excel cuenta los dias desde aqui
@@ -175,7 +177,7 @@ RELACIONES_LIBRO = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 
 def crear(pacientes, hoy=None):
     """Bytes del .xlsx con una fila por paciente, en el orden recibido."""
-    hoy = hoy or date.today()
+    hoy = hoy or reloj.hoy()
     ultima, fin = letra(len(COLUMNAS) - 1), max(len(pacientes) + 1, 2)
     memoria = io.BytesIO()
     with zipfile.ZipFile(memoria, "w", zipfile.ZIP_DEFLATED) as z:

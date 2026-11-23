@@ -47,7 +47,7 @@ function abrirEntrante(solicitud) {
   iniciarCuenta(ESPERA_RESPUESTA, porId('entranteSegundos'), porId('entranteBarra'), () => {
     cerrarModal();
     SERVIDOR.responderSolicitud(solicitudEntrante, false);
-    mostrarAviso('No respondiste a tiempo. Sigues con el control.', 'info');
+    mostrarAviso('No respondiste a tiempo. Conservas el control.', 'info');
     solicitudEntrante = null;
   });
 }
@@ -59,7 +59,7 @@ export function atenderSolicitud(solicitud) {
     abrirEntrante(solicitud);
   } else if (!solicitud && solicitudEntrante && panel.modalActivo === 'modalEntrante') {
     cerrarModal();
-    mostrarAviso(solicitudEntrante.usuario + ' ya no pide el control', 'info');
+    mostrarAviso(solicitudEntrante.usuario + ' canceló su solicitud', 'info');
     solicitudEntrante = null;
   }
 }
@@ -68,22 +68,22 @@ export function atenderSolicitud(solicitud) {
 export function resolverSolicitud(respuesta) {
   detenerCuenta();
   if (panel.modalActivo === 'modalEsperando') cerrarModal();
-  if (respuesta.aceptada) mostrarAviso('Te pasaron el control', 'ok');
-  else mostrarAviso((respuesta.usuario || 'El operador') + ' no te pasó el control', 'error');
+  if (respuesta.aceptada) mostrarAviso('Recibiste el control', 'ok');
+  else mostrarAviso((respuesta.usuario || 'El operador') + ' rechazó tu solicitud', 'error');
 }
 
 function solicitarAlTitular() {
   SERVIDOR.solicitarControl().then((r) => {
     if (r && r.ok) return;   // el aviso le llega al titular en su proxima consulta
     if (panel.modalActivo === 'modalEsperando') cerrarModal();
-    mostrarAviso((r && r.mensaje) || 'No se pudo pedir el control', 'error');
+    mostrarAviso((r && r.mensaje) || 'No se pudo solicitar el control', 'error');
   });
   porId('esperandoNombre').textContent = control.titular || '';
   abrirModal('modalEsperando');
   iniciarCuenta(ESPERA_SOLICITUD, porId('esperandoSegundos'), porId('esperandoBarra'), () => {
     cerrarModal();
     SERVIDOR.cancelarSolicitud();
-    mostrarAviso('No hubo respuesta. Sigues en solo lectura.', 'error');
+    mostrarAviso('No hubo respuesta. Continúas en solo lectura.', 'error');
   });
 }
 
@@ -120,6 +120,6 @@ export function iniciarCesion() {
   porId('btnPermitir').addEventListener('click', () => responderEntrante(true));
   porId('btnDenegar').addEventListener('click', () => {
     responderEntrante(false);
-    mostrarAviso('Denegaste la solicitud. Sigues con el control.', 'info');
+    mostrarAviso('Rechazaste la solicitud. Conservas el control.', 'info');
   });
 }

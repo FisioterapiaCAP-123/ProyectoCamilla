@@ -211,8 +211,10 @@ function descargarExcel() {
   ADMIN.excelPacientes(mostrados.map((p) => p.id)).then((r) => {
     if (!revisar(r)) return;
     bajarArchivo(r.archivo, r.nombre);
-    const filtro = cuantos < pacientes.length ? ` de ${pacientes.length} (los de la búsqueda)` : '';
-    mostrarAviso(`Excel descargado: ${cuantos} ${cuantos === 1 ? 'registro' : 'registros'}${filtro}`, 'ok');
+    const texto = cuantos < pacientes.length
+      ? `${cuantos} de ${pacientes.length} registros (según la búsqueda)`
+      : `${cuantos} ${cuantos === 1 ? 'registro' : 'registros'}`;
+    mostrarAviso(`Excel descargado: ${texto}.`, 'ok');
   }, () => revisar(null)).finally(() => { boton.disabled = mostrados.length === 0; });
 }
 
@@ -283,7 +285,7 @@ function abrirFicha(p) {
       { rotulo: 'Teléfono', texto: p.telefono && formatoTelefono(p.telefono) },
       { rotulo: 'Correo', texto: p.correo },
       { rotulo: 'Contacto de emergencia', texto: p.emergencia_nombre },
-      { rotulo: 'Su teléfono', texto: p.emergencia_telefono && formatoTelefono(p.emergencia_telefono) }
+      { rotulo: 'Teléfono de emergencia', texto: p.emergencia_telefono && formatoTelefono(p.emergencia_telefono) }
     ]) +
     seccionFicha('Medidas', [
       { rotulo: 'Estatura', texto: p.estatura != null && `${p.estatura.toFixed(2)} m` },
@@ -335,7 +337,7 @@ function ponerCita(valor) {
 
 /* Los cuatro controles -> "AAAA-MM-DD HH:MM", '' si no hay cita, o [control, aviso] si falta algo */
 function leerCita() {
-  if (cita.fecha.validity.badInput) return [cita.fecha, 'Esa fecha está incompleta.'];
+  if (cita.fecha.validity.badInput) return [cita.fecha, 'La fecha está incompleta.'];
   const { fecha, hora, minuto, periodo } = Object.fromEntries(Object.entries(cita).map(([k, c]) => [k, c.value]));
   if (!fecha && !hora) return '';
   if (!fecha) return [cita.fecha, 'Elige la fecha de la cita.'];
@@ -396,7 +398,7 @@ function cerrarFormulario() {
 function antesDeCerrarFormulario(e) {
   if (cerrarSinPreguntar || fotoFormulario() === original) return;
   e.preventDefault();
-  confirmar('¿Descartar cambios?', 'Lo que escribiste en este registro todavía no se ha guardado.', 'Descartar', true, cerrarFormulario);
+  confirmar('¿Descartar cambios?', 'Los cambios en este registro aún no se han guardado.', 'Descartar', true, cerrarFormulario);
 }
 
 function borrarPaciente(p) {
@@ -422,11 +424,11 @@ function leerFormulario() {
 
 /* Mensaje si el dato no sirve, o null. Vacio siempre sirve: todo es opcional */
 function errorDe(nombre, valor, campo) {
-  if (campo.validity.badInput) return 'Ese dato está incompleto o no es válido.';
+  if (campo.validity.badInput) return 'El dato está incompleto o no es válido.';
   if (valor === '' || valor === null) return null;
-  if (nombre === 'dpi' && !/^\d{13}$/.test(sinSeparadores(valor))) return 'El DPI tiene 13 números.';
-  if (TELEFONOS.includes(nombre) && !/^\d{8}$/.test(sinSeparadores(valor))) return 'El teléfono tiene 8 números.';
-  if (nombre === 'correo' && !CORREO.test(valor)) return 'Ese correo no es válido.';
+  if (nombre === 'dpi' && !/^\d{13}$/.test(sinSeparadores(valor))) return 'El DPI debe tener 13 dígitos.';
+  if (TELEFONOS.includes(nombre) && !/^\d{8}$/.test(sinSeparadores(valor))) return 'El teléfono debe tener 8 dígitos.';
+  if (nombre === 'correo' && !CORREO.test(valor)) return 'El correo no es válido.';
   if (nombre === 'nacimiento') {
     const hoy = new Date();
     if (valor > fechaLocal(hoy)) return 'La fecha de nacimiento no puede ser futura.';
@@ -451,7 +453,7 @@ function guardarPaciente(e) {
   if (Array.isArray(proxima)) return marcarCita(...proxima);
   datos.proxima_cita = proxima;
   if (Object.values(datos).every((v) => v === '' || v === null)) {
-    mostrarAviso('Llena al menos un campo.', 'error');
+    mostrarAviso('Completa al menos un campo.', 'error');
     return campos.nombres.focus();
   }
   botonGuardar.disabled = true;

@@ -19,6 +19,7 @@
 .buscador-admin .form-control{padding-left:2.5rem}
 /* Lupa dentro del buscador: no recibe clics, el input sigue tomando el foco */
 .lupa-buscador{position:absolute;left:.85rem;top:50%;transform:translateY(-50%);color:var(--bs-secondary-color);pointer-events:none}
+.campo-pin{font-size:1.8rem;letter-spacing:.6em;padding-left:1.4rem}   /* PIN de la tablet: grande y espaciado */
 .campo-corto{max-width:220px}   /* numeros cortos: dolor */
 /* Hora de la cita: tres listas en una fila, con menos relleno para que quepan en el celular */
 .hora-cita .form-select{padding-left:.75rem;padding-right:2.25rem;background-position:right .6rem center}

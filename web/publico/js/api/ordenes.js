@@ -22,13 +22,17 @@ export const SERVIDOR = {
   //   -> {ok:true, usuario:"usuario1", nombre:"Persona", rol:"admin"|"fisio", sesion:"token",
   //       control:{titular:"Persona"|null, usuario:"usuario1"|null}}
   //   -> {ok:false, mensaje:"..."}
-  login(usuario, clave) {
-    return llamar('/api/login', { usuario, clave }, 8000);
+  login(usuario, clave, recordar) {
+    return llamar('/api/login', { usuario, clave, recordar: Boolean(recordar), hora: Date.now() }, 8000);
+  },
+  // hora: la del equipo, en ms. La Raspberry no tiene reloj propio y corrige la suya con ella
+  reanudar(llave) {
+    return llamar('/api/reanudar', { llave, hora: Date.now() }, 8000);
   },
   // POST /api/registro {usuario, nombre, clave}   perfil nuevo (fisioterapeuta) y entra
   //   -> igual que login, o {ok:false, campo:"usuario"|"nombre"|"clave", mensaje:"..."}
   registro(usuario, nombre, clave) {
-    return llamar('/api/registro', { usuario, nombre, clave }, 8000);
+    return llamar('/api/registro', { usuario, nombre, clave, hora: Date.now() }, 8000);
   },
 
   // POST /api/logout          libera el control si lo tenia

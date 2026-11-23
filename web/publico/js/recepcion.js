@@ -1,5 +1,6 @@
 /* Aplica al panel lo que informa el servidor. El sondeo (api/sondeo.js) le entrega cada respuesta. */
-import { guardarToken } from './api/cliente.js';
+import { guardarToken, leerLlave } from './api/cliente.js';
+import { SERVIDOR } from './api/ordenes.js';
 import { activarParo, detenerTodo, liberarParo } from './camilla/movimiento.js';
 import { aplicarAngulos } from './camilla/telemetria.js';
 import { control, panel, sesion } from './estado.js';
@@ -9,23 +10,34 @@ import { registrar } from './ui/registro.js';
 import { porId } from './utilidades.js';
 import { aplicarControl, atenderSolicitud, resolverSolicitud } from './vistas/cesion.js';
 import { aplicarRol } from './vistas/pestanas.js';
-import { entrarAlPanel, sesionTerminada } from './vistas/sesion.js';
+import { actualizarRegistros } from './vistas/pin.js';
+import { avisoLogin } from './vistas/acceso.js';
+import { entrarAlPanel, reanudarEquipo, sesionTerminada } from './vistas/sesion.js';
 
 const ECO_MS = 1500;   // tras una orden propia se ignora lo que diga el servidor, que aun no la refleja
 
 const vistaPanel = porId('vistaPanel');
 
-let reanudar = Boolean(sesion.token);   // al recargar la pagina se vuelve a entrar con la misma sesion
+let reanudar = Boolean(sesion.token || leerLlave());
+let retomar = false;   // al despertar o reconectar, el equipo recordado retoma el control si esta libre
+
+export function retomarControl() {
+  if (leerLlave()) retomar = true;
+}
 
 export function recibir(e) {
   if (reanudar) {
     reanudar = false;
     if (e.usuario) entrarAlPanel(e, e.control);
-    else guardarToken('');
+    else {
+      guardarToken('');
+      if (e.cerrada) avisoLogin(e.cerrada, 'error');   // la cerro otro: no se vuelve a entrar solo
+      else reanudarEquipo();
+    }
     return;
   }
   if (sesion.usuario && !e.usuario) {
-    sesionTerminada();
+    sesionTerminada(e.cerrada);
     return;
   }
 
@@ -45,10 +57,19 @@ export function recibir(e) {
 
   // El administrador puede cambiar el rol mientras la pagina esta abierta
   if (e.rol !== sesion.rol) aplicarRol(e.rol);
+  actualizarRegistros(e.registros);   // PIN de la tablet
 
   if ((e.control.usuario || null) !== control.usuario) {
     registrar(`← control: ${e.control.titular || 'nadie'}  (yo: ${sesion.usuario})`);
     aplicarControl(e.control);
+  }
+  // Si otro lo tiene se respeta: se pide como siempre
+  if (retomar) {
+    retomar = false;
+    if (!e.control.usuario) {
+      registrar('EQUIPO RECORDADO: control libre, se retoma');
+      SERVIDOR.tomarControl();
+    }
   }
 
   atenderSolicitud(e.solicitud);
@@ -63,6 +84,7 @@ export function recibir(e) {
 export function reconectado() {
   if (control.conectado) return;
   control.conectado = true;
+  retomarControl();
   registrar('CONEXIÓN RECUPERADA');
   if (panel.modalActivo === 'modalSinConexion') cerrarModal();
   pintar();

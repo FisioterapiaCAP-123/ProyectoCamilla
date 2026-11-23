@@ -7,6 +7,7 @@ import { panel, sesion } from '../estado.js';
 import { pintarParoFlotante } from '../ui/pintado.js';
 import { porId } from '../utilidades.js';
 import { cargarPacientes } from './pacientes.js';
+import { bloquear, iniciarPin, pedirAcceso } from './pin.js';
 import { cargarUsuarios } from './usuarios.js';
 
 const PESTANAS = {
@@ -19,6 +20,7 @@ const navegacion = porId('pestanas');
 
 function mostrarPestana(cual) {
   if (cual !== 'control') detenerTodo();   // al salir de Control no queda nada moviendose
+  else bloquear();                          // en la tablet, volver a Control cierra Registros y Usuarios (vistas/pin.js)
   panel.pestana = cual;
   Object.entries(PESTANAS).forEach(([nombre, { nodo }]) => { nodo.hidden = nombre !== cual; });
   navegacion.querySelectorAll('[data-pestana]').forEach((boton) => {
@@ -41,6 +43,10 @@ export function aplicarRol(rol) {
 export function iniciarPestanas() {
   navegacion.addEventListener('click', (e) => {
     const boton = e.target.closest('[data-pestana]');
-    if (boton && boton.dataset.pestana !== panel.pestana) mostrarPestana(boton.dataset.pestana);
+    if (!boton || boton.dataset.pestana === panel.pestana) return;
+    const cual = boton.dataset.pestana;
+    if (cual === 'control') mostrarPestana(cual);
+    else pedirAcceso(() => mostrarPestana(cual));   // en la tablet piden PIN
   });
+  iniciarPin({ irAControl: () => mostrarPestana('control') });
 }

@@ -2,7 +2,7 @@
 import { consultar, iniciarSondeo } from './api/sondeo.js';
 import { iniciarMandos } from './camilla/mandos.js';
 import { exponerApi } from './camilla/telemetria.js';
-import { caidaDeConexion, reconectado, recibir } from './recepcion.js';
+import { caidaDeConexion, reconectado, recibir, retomarControl } from './recepcion.js';
 import { iniciarModales } from './ui/modales.js';
 import { pintar, prepararEscalas } from './ui/pintado.js';
 import { iniciarDiagnostico, registrar } from './ui/registro.js';
@@ -29,6 +29,12 @@ exponerApi();
 
 porId('btnReintentar').addEventListener('click', () => {
   registrar('REINTENTANDO CONEXIÓN');
+  consultar();
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  retomarControl();
   consultar();
 });
 

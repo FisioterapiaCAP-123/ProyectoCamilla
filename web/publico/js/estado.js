@@ -18,7 +18,8 @@ export const panel = {
 /* Quien esta operando la camilla ahora mismo. Lo dicta el servidor. */
 export const control = { titular: null, usuario: null, soyYo: false, conectado: true };   // titular: nombre que se muestra
 
-export const sesion = { usuario: null, nombre: null, rol: null, token: '' };
+/* registros: {pin, abierto, pide_clave} en un equipo recordado de un administrador (vistas/pin.js), si no null */
+export const sesion = { usuario: null, nombre: null, rol: null, token: '', registros: null };
 
 /* Mover exige tener el control. El PARO no: ese nunca depende de esto. */
 export function puedeMover(seccion) {

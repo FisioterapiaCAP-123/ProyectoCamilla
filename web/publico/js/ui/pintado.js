@@ -137,7 +137,7 @@ function botonControl(accion, tono, texto) {
 
 function datosBarraControl() {
   if (!control.conectado) {
-    return { estado: 'sin-conexion', rotulo: 'Sin conexión', nombre: 'Movimiento inhibido', inicial: '!', acciones: '' };
+    return { estado: 'sin-conexion', rotulo: 'Sin conexión', nombre: 'Movimiento deshabilitado', inicial: '!', acciones: '' };
   }
   if (!control.titular) {
     return { estado: 'libre', rotulo: 'Control de la camilla', nombre: 'No lo tiene nadie', inicial: '—',

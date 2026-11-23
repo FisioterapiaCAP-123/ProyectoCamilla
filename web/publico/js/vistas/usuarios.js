@@ -66,25 +66,25 @@ function cambiarUsuario(accion, datos, aviso) {
 
 function hacerAdministrador(u) {
   confirmar(`¿Hacer administrador a ${u.nombre}?`,
-    'Podrá ver los registros de pacientes y manejar los perfiles.', 'Hacer administrador', false,
+    'Podrá ver los registros de pacientes y administrar los perfiles.', 'Hacer administrador', false,
     () => cambiarUsuario('rol', { id: u.id, rol: 'admin' }, `${u.nombre} ahora es administrador`));
 }
 
 function quitarAdministrador(u) {
   confirmar(`¿Quitarle el rol de administrador a ${u.nombre}?`,
-    'Queda como fisioterapeuta: ya no verá los registros ni los perfiles.', 'Quitar rol', true,
+    'Quedará como fisioterapeuta y ya no podrá ver los registros ni los perfiles.', 'Quitar rol', true,
     () => cambiarUsuario('rol', { id: u.id, rol: 'fisio' }, `${u.nombre} ahora es fisioterapeuta`));
 }
 
 function desactivar(u) {
   confirmar(`¿Desactivar a ${u.nombre}?`,
-    'No podrá entrar hasta que lo actives otra vez. Si está conectado, su sesión se cierra.', 'Desactivar', true,
+    'No podrá iniciar sesión hasta que lo vuelvas a activar. Si está conectado, su sesión se cerrará.', 'Desactivar', true,
     () => cambiarUsuario('activo', { id: u.id, activo: false }, `${u.nombre} quedó desactivado`));
 }
 
 function borrar(u) {
   confirmar(`¿Borrar el perfil de ${u.nombre}?`,
-    'Se borra para siempre. Si está conectado, su sesión se cierra. Los registros que agregó se quedan.', 'Borrar', true,
+    'Esta acción no se puede deshacer. Si está conectado, su sesión se cerrará. Los registros que creó se conservan.', 'Borrar', true,
     () => cambiarUsuario('borrar', { id: u.id }, `Perfil de ${u.nombre} borrado`));
 }
 
@@ -98,7 +98,7 @@ function pedirClaveNueva(u) {
 
 const ACCIONES = {
   rol: (u) => (u.rol === 'admin' ? quitarAdministrador(u) : hacerAdministrador(u)),
-  activo: (u) => (u.activo ? desactivar(u) : cambiarUsuario('activo', { id: u.id, activo: true }, `${u.nombre} puede entrar otra vez`)),
+  activo: (u) => (u.activo ? desactivar(u) : cambiarUsuario('activo', { id: u.id, activo: true }, `${u.nombre} fue activado de nuevo`)),
   borrar,
   clave: pedirClaveNueva
 };
