@@ -406,9 +406,22 @@ git push origin desarrollo-final
 
 ```bash
 sudo systemctl stop camilla-pagina camilla-red     # vuelve a su WiFi
-cd ~/Desktop/"Proyecto Camilla"                    # o ~/Desktop/Camilla: ver la sección 12
+cd ~/Desktop/Camilla
 git fetch && git checkout desarrollo-final && git pull
 sudo systemctl start camilla-red camilla-pagina    # o solo: sudo systemctl restart camilla-pagina
+```
+
+**Volver a encender la red Camilla estando por SSH.** Al encenderla, el WiFi de la Pi deja internet y el SSH por WiFi se corta (es normal). `--no-block` deja el encendido en manos de systemd, así sigue aunque se corte la conexión:
+
+```bash
+sudo systemctl start --no-block camilla-red camilla-pagina
+```
+
+Después: conectar la laptop a la red **Camilla** y entrar de nuevo con `ssh diegocardona@10.42.0.1`. Ahí se revisa que la página arrancó (debe decir `Pagina en http://localhost:8000`):
+
+```bash
+systemctl is-active camilla-red camilla-pagina      # los dos: active
+journalctl -t python3 -n 20 --no-pager
 ```
 
 **Cargar el ESP32 por SSH con `mpremote`** (sin Thonny ni pantalla), con la página apagada. `camilla-pagina` se reinicia sola: un `pkill` no basta.
@@ -455,8 +468,8 @@ Si `/dev/ttyUSB0` aparece y desaparece: `sudo apt remove -y brltty`. No copiar l
 
 ## 12. Raspberry real
 
-- Usuario `diegocardona`. Las notas anteriores nombran la carpeta del proyecto como `~/Desktop/Camilla` y como `~/Desktop/"Proyecto Camilla"`: confirmar cuál es.
-- **Rama instalada: sin confirmar.** La presentación del 13-11 se hizo con `muestra-citein`; para seguir hay que llevarle `desarrollo-final`.
+- Usuario `diegocardona`. Carpeta del proyecto: **`~/Desktop/Camilla`** (confirmado el 23-11).
+- **Rama instalada: `desarrollo-final`** (`0373ed3`, 23-11). Antes tenía `muestra-citein`, la de la presentación del 13-11. Para volver a ella: `git checkout muestra-citein` y reiniciar `camilla-pagina`. Entre las dos ramas, `esp32/` y `red/` son iguales: no hace falta volver a cargar el ESP32.
 - Python 3.13, pyserial 3.5, permiso `dialout`, hostapd, dnsmasq, nft y nmcli instalados. Red Camilla y arranque automático instalados y funcionando (12-11).
 - El ESP32 aparece como `CP2102` (`10c4:ea60`) en `/dev/ttyUSB0`.
 - Se usa con pantalla, teclado y mouse USB, y por SSH desde la laptop.
