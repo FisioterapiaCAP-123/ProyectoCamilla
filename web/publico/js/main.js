@@ -9,6 +9,7 @@ import { iniciarDiagnostico, registrar } from './ui/registro.js';
 import { porId } from './utilidades.js';
 import { iniciarAcceso } from './vistas/acceso.js';
 import { iniciarCesion } from './vistas/cesion.js';
+import { iniciarManuales } from './vistas/manuales.js';
 import { iniciarPacientes } from './vistas/pacientes.js';
 import { iniciarPestanas } from './vistas/pestanas.js';
 import { entrarAlPanel, iniciarSalida } from './vistas/sesion.js';
@@ -23,6 +24,7 @@ iniciarSalida();
 iniciarPestanas();
 iniciarPacientes();
 iniciarUsuarios();
+iniciarManuales();
 exponerApi();
 
 porId('btnReintentar').addEventListener('click', () => {

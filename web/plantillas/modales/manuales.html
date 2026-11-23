@@ -1,0 +1,28 @@
+<!-- 9 · Manuales en PDF (vistas/manuales.js). Los archivos van en web/manuales/ -->
+<div class="modal fade" id="modalManuales" tabindex="-1" aria-labelledby="tManuales" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4 modal-tope tope-altura">
+      <div class="modal-body p-4 d-flex flex-column gap-3">
+        <h2 class="tipo-titulo mb-0 titulo-modal" id="tManuales">Manuales</h2>
+
+        <div class="border rounded-3 p-3 d-flex align-items-center gap-3 flex-wrap">
+          <div class="me-auto">
+            <div class="fw-semibold">Manual de usuario</div>
+            <div class="small text-body-secondary">Cómo usar la camilla y el panel.</div>
+          </div>
+          <button type="button" class="btn btn-primary tipo-titulo text-uppercase fw-semibold" data-manual="usuario">Descargar</button>
+        </div>
+
+        <div class="border rounded-3 p-3 d-flex align-items-center gap-3 flex-wrap" id="manualTecnico" hidden>
+          <div class="me-auto">
+            <div class="fw-semibold">Manual técnico</div>
+            <div class="small text-body-secondary">Instalación, conexiones y mantenimiento. Solo administradores.</div>
+          </div>
+          <button type="button" class="btn btn-primary tipo-titulo text-uppercase fw-semibold" data-manual="tecnico">Descargar</button>
+        </div>
+
+        <button type="button" class="btn btn-outline-secondary btn-lg tipo-titulo text-uppercase fw-semibold btn-accion btn-accion-sec" id="btnManualesCerrar">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,5 +1,5 @@
 /* Pedidos de administracion: el servidor solo los acepta con rol admin. */
-import { llamar } from './cliente.js';
+import { descargar, llamar } from './cliente.js';
 
 export const ADMIN = {
   // POST /api/pacientes/lista            -> {ok, pacientes:[{id, ...campos, creado, creado_por}]}
@@ -11,7 +11,9 @@ export const ADMIN = {
   guardarPaciente(paciente) { return llamar('/api/pacientes/guardar', paciente); },
   // POST /api/pacientes/borrar {id}
   borrarPaciente(id) { return llamar('/api/pacientes/borrar', { id }); },
-  // POST /api/usuarios/lista             -> {ok, usuarios:[{id, usuario, nombre, rol, activo, creado}]}
+  // POST /api/pacientes/excel {ids:[...]}  -> archivo .xlsx con esos registros, en ese orden
+  excelPacientes(ids) { return descargar('/api/pacientes/excel', { ids }); },
+  // POST /api/usuarios/lista            -> {ok, usuarios:[{id, usuario, nombre, rol, activo, creado}]}
   usuarios() { return llamar('/api/usuarios/lista'); },
   // POST /api/usuarios/{rol|activo|clave|borrar} {id, rol|activo|clave}   nunca el perfil propio
   cambiarUsuario(accion, datos) { return llamar('/api/usuarios/' + accion, datos); }

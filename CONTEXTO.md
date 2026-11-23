@@ -1,167 +1,258 @@
 # Contexto del proyecto
 
-**Fecha:** 09-11-2026, con agregados del 10-11, 11-11, 12-11, 13-11 y 16-11-2026. Resumen para retomar el trabajo desde cero: qué se busca, cómo está todo y qué sigue. El detalle del sistema está en `GUIA.md` e `INTEGRACION.md`, pero esas dos **todavía no incluyen la integración del ESP32** (ver "Documentación pendiente").
+**Actualizado el 20-11-2026.** Rama `desarrollo-final`, creada ese día desde `master` (`1eaf7a2`, del 16-11) para terminar el desarrollo. El software se revisó contra el código de esta rama, archivo por archivo. Lo que no se puede comprobar desde el PC (hardware, Raspberry) viene de las notas anteriores, con la fecha en que se probó, o se marca "sin confirmar".
 
-## Dónde quedamos
+- La versión anterior de este archivo, con la historia del 09-11 al 16-11, el análisis completo de sensores de ángulo y el diseño del encoder, se ve con `git show 1eaf7a2:CONTEXTO.md`.
+- **Otras ramas: no se usan como referencia**, salvo que el usuario lo pida. `manuales` (manuales de la tesis y un diseño con AS5600 sin montar), `muestra-citein` (interfaz sin grados de la presentación del 13-11), `backup-cambios-esp32` (encoder; tiene `codigoesp32.txt` con la clave del WiFi), `esp32-conexion` y `optimizaciones-esp32` (viejas).
+- `GUIA.md` e `INTEGRACION.md` están desactualizadas: describen el sistema en simulación, sin ESP32 (ver la sección 9).
 
-- **09-11: primera prueba real completa.** La cadena página → Raspberry → USB → ESP32 → módulo de relés → actuadores funcionó: se movieron. Al desconectar el USB, la página avisa "Sin conexión con los motores" y los relés se apagan. Al reconectarlo, vuelve solo.
-- Con los motores en marcha aparecen **errores USB** (`urb stopped: -32`) que dejaban el puerto mudo hasta reiniciar el servidor. `web/hardware.py` ya reabre el puerto solo (commit `99a91cf`, en GitHub). **Falta bajarlo en la Raspberry y probarlo con motores.**
-- El módulo de relés es **solo para la presentación del viernes 13-11-2026**. El definitivo es **un BTS7960 por sección** (ver "Hardware").
-- **09-11, tarde:** el compañero actualizó su código para manejar un puente H (L298N o BTS7960) en los pines 25 y 26. `esp32/main.py` se adaptó: ahora usa `MODULO = "puente"` por omisión, y los relés quedan como opción. **Se cargó en la placa real y funcionó con el puente H en Cabeza**: subir, bajar y parar desde la página, sin cortes del ESP32 durante unos 3 minutos de prueba. Está en el commit `fa1a602`, en GitHub.
-- **11-11: llegó el MD-BTS7960 y se decidió empezar por Piernas, no por Cabeza.** El compañero ya probó los 2 actuadores de Piernas en un solo BTS7960 y aguantó, con su código (WiFi y PWM; copia en `compi.txt`, que **tiene la clave del WiFi: no se sube**). Ese código usa **GPIO 26 → RPWM y GPIO 27 → LPWM**; su comentario dice 25 y 26, pero lo que funcionó fue 26 y 27. `esp32/main.py` ahora maneja `piernas` en el modo `puente` con esos pines, siempre al 100 %. `config.js` le puso `continua` y `sinTope` a Piernas. Subido en `1d4ed7d`, y Piernas **funcionó en la placa real** con el BTS7960.
-- **11-11, después:** mientras llega otro BTS7960, Cabeza va en un **L298N** (el rojo) con **1 solo actuador**, porque falta que llegue el otro. Se usan los pines del nuevo código del compañero (`compi.txt`): **GPIO 18 → IN1 (extender) y GPIO 19 → IN2 (retraer)**, con ENA en su jumper. `esp32/main.py` ahora tiene las dos secciones en modo `puente` (`CABEZA_EXTENDER` y `CABEZA_RETRAER`). Probado en simulación sin fallas (`probar_dos_puentes.py` y `probar_panel_dos.py`). **Sin commit, por pedido del usuario**: no subir nada sin que lo pida explícitamente. Se lleva a la Raspberry cuando el usuario decida (git, Thonny o scp).
-- **10-11: se habló de sensores de ángulo para Cabeza y Piernas.** Ver "Propuestas → Sensores de ángulo".
-- **11-11: el usuario eligió un encoder óptico absoluto en código Gray para Piernas, de 0° a 90°**, con LED y fototransistores sueltos que arma él, e impreso en 3D por un compañero. El usuario lo movió a la **rama local `backup-cambios-esp32`** (commit `ce2474a`, carpeta `encoder/`). Ese commit también guarda `codigoesp32.txt` con la clave del WiFi: **no subir esa rama así**; para publicar el encoder, armar una rama sin ese archivo. Primero se arma un **banco de prueba** que se gira a mano. Guía visual: https://claude.ai/artifact/MAu8PJ5JfVQvSUGJZH4XQU. Ver "Encoder de piernas".
-- Rama `esp32-conexion`, en GitHub en `554e381`. En el PC la rama sigue enlazada a `origin/optimizaciones-esp32`, así que hay que subir con `git push origin esp32-conexion`.
-- **12-11: registros de pacientes completos**, en `master` y `esp32-conexion` (commit `554e381`). Campos opcionales: nombres, apellidos, sexo, nacimiento, DPI, carné, teléfono, correo, contacto de emergencia, estatura (m), peso (lb), fisioterapeuta, diagnóstico, dolor EVA 0-10, próxima cita (AM/PM) y notas. DPI y teléfonos con máscara de solo números. Tabla a lo ancho con buscador, formulario en panel lateral con "¿Descartar cambios?" y ficha de solo lectura. La base vieja se migra sola al arrancar. `web/datos_prueba.py` agrega o borra 20 pacientes inventados. `master` quedó igual a `esp32-conexion`.
-- **12-11: rama `muestra-citein`** (desde `master`, en GitHub en `7fe11c1`) **para la presentación del 13-11.** La pestaña Control ya no muestra grados: Cabeza y Piernas dicen SUBIENDO / BAJANDO / EN REPOSO. Sin riel de grados, "Destino", "Ir a", `+1°`/`-1°` ni el botón "Plano 0°". El diagrama anima en bucle la sección que se mueve mientras se mantiene el botón; al soltar queda arriba si subió o recta si bajó (solo dibujo, no hay sensor). La altura quedó como estaba. El servidor y `esp32/main.py` no cambiaron: el firmware sigue como el 11-11 (BTS7960 de Piernas en 26 y 27, L298N de Cabeza en 18 y 19).
-- **12-11, noche: arranque automático** (`red/instalar_arranque.sh` y `red/arranque_red.sh`): dos servicios de systemd, `camilla-red` (root: hostapd, dnsmasq y nft) y `camilla-pagina` (el usuario, en `dialout`). La red y la página se encienden solas al prender la Raspberry, sin clave. **Instalado en la Raspberry y funcionando.** Detener un rato: `sudo systemctl stop camilla-pagina camilla-red` (al reiniciar vuelven); que no arranquen: `disable`; quitar: `sudo ./instalar_arranque.sh quitar`. Ver `GUIA.md` 8.6.
-- **13-11: altura con motor paso a paso**, un **NEMA 17 con driver DRV8825** (placa morada con disipador, pines con nombres de clon: STP, 1A/2A/1B/2B). Ver "ESP32 → Altura". `esp32/main.py` tiene la sección `altura`; `config.js` le puso `sinTope` a la altura y `pintado.js` oculta el aviso de tope cuando hay `sinTope`. `esp32/prueba_stepper.py` prueba el motor solo desde Thonny (no se guarda como `main.py`). **Las tres secciones (altura, cabeza y piernas) funcionaron en la placa real desde la página.** Para cargar `main.py` al ESP32 sin Thonny, por SSH, sirve `mpremote` (ver "Comandos").
-- **13-11: presentación hecha** con la rama `muestra-citein`.
-- **16-11: `master` tiene todo lo de `muestra-citein` menos la interfaz sin ángulos** (commit `7fe11c1`, que se queda solo en esa rama): arranque automático, stepper, `prueba_stepper.py`, `sinTope` de la altura y estas notas. En `master` la pestaña Control sigue mostrando grados estimados. **Conectado al 16-11:** Cabeza en el L298N (18 y 19) y Piernas en el BTS7960 (26 y 27) con sus 2 actuadores. El stepper no se mencionó como conectado; el ESP32 igual informa `altura`, así que la página la deja usar aunque no haya motor (no pasa nada).
+## 1. Estado en una mirada
 
-**Siguiente, en orden:**
-
-1. **Decidir la interfaz:** si `master` se queda con grados estimados o pasa a SUBIENDO / BAJANDO como `muestra-citein` (basta con traer el commit `7fe11c1`).
-2. **Altura con la camilla real:** saber qué husillo tiene (mm por vuelta) y medir la velocidad: mantener Subir 5 s y medir los mm. Si con peso zumba, se atora o baja solo, bajar `PASOS_VELOCIDAD` a 800 o 600. Si el husillo no es autobloqueante (paso largo, como T8×8), la camilla baja sola al cortar la energía: hace falta husillo de paso fino, freno o reductor.
-3. **Finales de carrera de la altura** en GPIO 4 (abajo) y 35 (arriba, con 10 kΩ a 3.3 V). `prueba_stepper.py` ya los lee con `USAR_FINALES = True`; `main.py` todavía no.
-4. **Cabeza con su propio BTS7960** y sus 2 actuadores (hoy L298N con 1 actuador, que aguanta unos 2 A por canal).
-5. **Probar con la red Camilla** desde el celular y hacer el conteo de errores USB con motores en marcha. Al escribir esto, el usuario no había reportado el resultado.
-6. **Encoder de piernas:** imprimir las 4 piezas, comprar los componentes y armar el banco siguiendo la guía. Después, con las medidas de la bisagra, diseñar los soportes para la camilla (ver "Encoder de piernas").
-7. **Paro físico** que corte la fuente de motores (ver "Propuestas").
-
-## Qué se busca y cómo está
-
-Control remoto web en una Raspberry Pi 4 para la altura, la cabeza y las piernas de una camilla, para uso en un centro de salud. Debe funcionar sin intervención del desarrollador. El PC Windows es solo para desarrollar, porque la Pi es lenta. La red es local, de la propia Raspberry, sin internet.
-
-| Objetivo | Estado |
+| Parte | Estado |
 |---|---|
-| Control remoto web | Hecho. Las tres secciones funcionaron con la placa real el 13-11: Piernas (BTS7960), Cabeza (L298N) y Altura (stepper). |
-| Registro en SQLite | Hay `usuarios` y `pacientes`. No hay bitácora de uso. |
-| Roles admin y fisioterapeuta | Hecho y validado en el servidor. El admin controla la camilla y ve registros. |
-| Ver ángulos y altura | Solo estimados en pantalla: no hay sensores, y los actuadores no traen sensor de posición. |
-| ESP32 con 5 actuadores (2 cabeza, 2 piernas, altura) | Piernas (2) en BTS7960, funcionando. Cabeza (1 de 2) en L298N, funcionando; falta su BTS7960 y el segundo actuador. Altura con NEMA 17 y DRV8825, funcionando sin carga. |
-| Tiempo real con WebSocket | No hay. Se hará cuando el hardware esté estable. La página consulta cada 1 s. |
-| Funcionar sin intervención | Casi: el arranque automático está instalado (red y página solas al prender). Falta el paro físico. El servidor reabre el USB solo, pero eso falta probarlo en la Raspberry. |
+| Control desde el celular | Funciona. El 13-11 las tres secciones se movieron desde la página con la placa real. |
+| Piernas | 2 actuadores 1500N en paralelo en un BTS7960 (GPIO 26 y 27). Probado en la placa real el 11-11. |
+| Cabeza | 1 actuador 3000N (de 2) en un L298N (GPIO 18 y 19). Probado en la placa real. Faltan su BTS7960 y el segundo actuador. |
+| Altura | NEMA 17 con DRV8825 (GPIO 25, 33 y 13). Probado sin carga el 13-11. Sin finales de carrera en `main.py`. Husillo sin definir. |
+| Ángulos y altura en pantalla | Estimados: no hay sensores. Cada página calcula su propia estimación y las demás pantallas no la ven. |
+| "Ir a" y "Plano 0°" | Solo mueven el número y el dibujo. No mueven motores. |
+| Seguridad del movimiento | Hombre muerto en la página, el servidor y el ESP32; watchdog; órdenes numeradas; paro lógico. **No hay paro físico.** |
+| Perfiles, roles y pacientes | Completo, en SQLite. Registro de perfiles abierto. Sin bitácora de uso. |
+| Red Camilla y arranque automático | Instalados y funcionando en la Raspberry desde el 12-11. |
+| Tiempo real | Sin WebSocket: la página consulta cada 1 s. |
 
-## Flujo actual
+## 2. Arquitectura
 
 ```text
-Navegador (plantillas/ + publico/css + publico/js)
-  GET /api/estado cada 1 s: control, paro, pedidos, ángulos, hardware
-  POST /api/...: login, control, mover, detener, paso, paro
-      |
-servidor.py :8000 (hilos, HTTP/1.0)
-  paginas.py: compone el HTML y entrega publico/
-  Camilla (memoria + candado): sesiones, titular, paro, ángulos, motor
+Navegador (celular o PC)
+  GET  /api/estado cada 1 s
+  POST /api/mover cada 400 ms mientras se mantiene un botón; /api/detener al soltar
+      |  WiFi "Camilla" (hostapd, WPA2, sin internet). La Raspberry es 10.42.0.1
+Raspberry Pi 4: web/servidor.py en el puerto 8000 (ThreadingHTTPServer, HTTP/1.0)
+  Camilla (en memoria, con candado): sesiones, titular, pedido de control, paro, motor
   vigilar() cada 0.5 s: hombre muerto, ESP32 perdido, titular caído, pedidos vencidos
-  basedatos.py -> camilla.db
-  hardware.py: Esp32Serial (hilo propio) o Simulador
-      | USB serie, 115200
-ESP32 con esp32/main.py (MicroPython) -> relés hoy, BTS7960 al final -> actuadores
+  basedatos.py -> web/camilla.db
+  hardware.py: Esp32Serial (hilo propio, una línea cada 200 ms) o Simulador (--simulador)
+      |  USB serie a 115200 (CP2102, /dev/ttyUSB0)
+ESP32 WROOM-32 con esp32/main.py (MicroPython v1.29.0)
+  piernas -> BTS7960 (26, 27) -> 2 actuadores 1500N
+  cabeza  -> L298N (18, 19)   -> 1 actuador 3000N
+  altura  -> DRV8825 (25 STEP, 33 DIR, 13 EN) -> NEMA 17
 ```
 
-- **Sesión:** un perfil, una sesión. Reiniciar el servidor saca a todos.
-- **Control:** un solo titular. Libre: lo toma quien entra. Ocupado: solo lectura y pedido de 30 s. Sin señal 10 s: se libera.
-- **Cabeza y altura:** mantener repite `/api/mover` cada 400 ms; soltar envía `/api/detener`.
-- **Piernas:** un `/api/paso` por grado (simulado). En modo real está deshabilitada.
-- **"Ir a" y "Plano 0°":** bucles en el navegador. En cabeza solo cambian el número; no mueven el actuador.
+**Una orden de punta a punta** (mantener "Subir" de Cabeza):
 
-## Estructura
+1. `pointerdown` → `iniciarManual('cabeza', 1)` en `camilla/movimiento.js`. Primero llama a `detenerTodo()`; después `SERVIDOR.mover` manda `POST /api/mover {seccion, dir, n}` y lo repite cada 400 ms. Cada 70 ms suma 1° a la estimación local.
+2. `servidor.py`: `accion_mover` descarta la orden si su `n` es viejo. `Camilla.mover` exige ser el titular, que no haya paro y que el ESP32 esté vivo e informe esa sección; si no, la descarta en silencio. Guarda `Camilla.motor` y llama a `hardware.mover`.
+3. `hardware.py` guarda la orden (una sola a la vez). Su hilo escribe `M cabeza 1*XX` al momento y después cada 200 ms.
+4. ESP32: arranca la sección si pasaron los 300 ms de pausa y responde a cada orden válida con `E altura=detenido cabeza=extendiendo piernas=detenido*XX`.
+5. Al soltar: `POST /api/detener` → `parar_motores` → el hilo manda `X`, que detiene todas las secciones.
+
+**Si algo se corta:**
+
+| Falla | Quién para | En cuánto |
+|---|---|---|
+| Se suelta el botón o la página se oculta | Página → servidor → `X` | Lo que tarde la red |
+| El celular pierde el WiFi | Servidor (`HOMBRE_MUERTO`) | Entre 1.0 y 1.5 s |
+| Se cuelga o cae el servidor, o se corta el USB | ESP32 (`LIMITE_SIN_ORDEN_MS`) | 0.5 s |
+| Se cuelga `main.py` | Watchdog del ESP32: reinicia la placa con todo apagado | 2 s |
+| Paro en cualquier pantalla | Servidor → `X` | Lo que tarde la red |
+
+**Estructura:**
 
 ```text
-red/                    instalar_red.sh, encender_red.sh
-esp32/main.py           programa del ESP32 (se carga con Thonny como main.py)
-compi.txt               código del compañero con BTS7960 (WiFi y PWM). TIENE LA CLAVE DEL WIFI. No se sube.
-(encoder/ está en la rama local backup-cambios-esp32: generar_piezas.py, stl/, prueba_encoder.py)
-codigoesp32.txt         código original del compañero, solo respaldo. TIENE LA CLAVE DEL WIFI.
-web/
-  servidor.py, basedatos.py, paginas.py
-  hardware.py           Simulador y Esp32Serial
-  plantillas/           index.html (esqueleto) y parciales: login, panel/, modales/
-  publico/              lo único accesible por HTTP
-    css/                tokens, base, botones, secciones, camilla, panel, modales, login, admin
-    vendor/             Bootstrap y fuentes
-    js/
-      main.js, config.js, estado.js, utilidades.js, recepcion.js
-      api/              cliente, sondeo, ordenes, admin
-      ui/               pintado, dibujo, modales, avisos, formularios, registro
-      camilla/          movimiento, mandos, telemetria
-      vistas/           acceso, sesion, cesion, pestanas, pacientes, usuarios
+esp32/        main.py (firmware), prueba_stepper.py (prueba del stepper en Thonny)
+red/          instalar_red.sh, encender_red.sh, instalar_arranque.sh, arranque_red.sh
+web/          servidor.py, hardware.py, basedatos.py, paginas.py, datos_prueba.py
+  plantillas/ index.html y parciales: login.html, paro-flotante.html, panel/ (control/, registros, usuarios), modales/
+  publico/    lo único que se entrega por HTTP: css/, js/ (api/, camilla/, ui/, vistas/), vendor/ (Bootstrap y fuentes)
+CONTEXTO.md, GUIA.md, INTEGRACION.md, README.md
+compi.txt     (sin seguimiento en git) código del compañero. TIENE LA CLAVE DEL WIFI: no se sube.
 ```
 
-- Sin compilación: el servidor inserta cada `<!-- incluir: ruta -->` y el navegador carga módulos ES. Los módulos no tienen dependencias circulares.
-- `publico/` solo entrega `.css`, `.js` y `.woff2`. `camilla.db` y el código quedan fuera.
-- La función de cada archivo está en la sección 10 de `INTEGRACION.md` (falta agregar lo del ESP32).
+## 3. ESP32: `esp32/main.py`
 
-## Raspberry real
+**Placa:** ESP32 WROOM-32 con CP2102 (`10c4:ea60`), MicroPython v1.29.0. En la placa hay un `boot.py` sin lógica y nuestro `main.py`. Al abrir el puerto la placa se reinicia (`rst:0x1`) y en 1 a 2 s imprime `# camilla lista`.
 
-- Usuario `diegocardona`, proyecto en `~/Desktop/Camilla`, rama `esp32-conexion`.
-- Python 3.13, pyserial 3.5, permiso `dialout`, `hostapd`, `dnsmasq`, `nft` y `nmcli` instalados. La red Camilla ya está instalada (`/etc/hostapd/camilla.conf`). La lista de "Preparar la Raspberry" salió completa el 09-11.
-- El ESP32 aparece como `CP2102` (`10c4:ea60`) en `/dev/ttyUSB0`.
-- Se usa con pantalla, teclado y mouse USB, y por SSH desde la laptop.
-- **WiFi Meso:** IP `172.17.71.64` por DHCP, puede cambiar. Meso saca a la Raspberry cada 30 s más o menos (`WNM: Disassociation Imminent` en `journalctl`) y por eso se cae el SSH. No es falla de la Raspberry. **El servidor se corre desde una terminal en la pantalla de la Raspberry**, porque si se corta el SSH se apaga. Si hace falta SSH estable, por cable de red.
-- El registro del sistema no es persistente: `journalctl -b -1` no muestra el arranque anterior. Reiniciar borra la evidencia, incluido `vcgencmd get_throttled`.
-- `Connection closed by ... port 22` suele significar que la Raspberry se está reiniciando.
+**Configuración** (al inicio del archivo; se cambia antes de cargarlo):
 
-## ESP32
+| Constante | Valor | Para qué |
+|---|---|---|
+| `MODULO` | `"puente"` | `"puente"`: piernas, cabeza y altura. `"reles"`: solo cabeza con el módulo de 4 relés (no crea la altura). |
+| `PIN_EXTENDER`, `PIN_RETRAER` | 26, 27 | Piernas: RPWM y LPWM del BTS7960 |
+| `PIN_HABILITAR` | `None` | R_EN y L_EN van a 3.3 V. Con un GPIO, se apaga al parar. |
+| `CABEZA_EXTENDER`, `CABEZA_RETRAER` | 18, 19 | Cabeza: IN1 e IN2 del L298N (ENA con su jumper) |
+| `VELOCIDAD`, `FRECUENCIA_PWM` | 100 %, 1000 Hz | Puentes H: siempre a toda potencia |
+| `ALTURA_STEPPER` | `True` | Crea la sección `altura` |
+| `ALTURA_STEP`, `ALTURA_DIR`, `ALTURA_EN` | 25, 33, 13 | DRV8825: STP, DIR y EN (EN activo en bajo) |
+| `SUBIR_CON_DIR` | 1 | Si "Subir" baja, se pone 0 |
+| `PASOS_INICIO`, `PASOS_ACELERACION`, `PASOS_VELOCIDAD` | 250, 1500, 1000 | Arranca a 250 pasos/s y llega a 1000 en 0.5 s (5 vueltas/s en paso completo). A 1000 de golpe un NEMA 17 zumba y no arranca. Si zumba o se atora con carga: 800 o 600. |
+| `MANTENER_FUERZA` | `True` | Quieto, el stepper sigue sujetando (EN siempre en 0) y se calienta |
+| `ACTIVO_BAJO` | `True` | Solo para los relés |
+| `PAUSA_CAMBIO_MS` | 300 | Pausa entre apagar una sección y volver a arrancarla o invertirla |
+| `LIMITE_SIN_ORDEN_MS` | 500 | Sin `M` en ese tiempo, la sección para sola |
+| `WATCHDOG_MS` | 2000 | Watchdog, activado con la primera línea válida (así Thonny puede entrar antes) |
+| `LARGO_MAXIMO` | 64 | Una línea más larga se descarta |
 
-**Placa:** ESP32 WROOM-32 con CP2102, MicroPython v1.29.0. En la placa hay un `boot.py` sin lógica y nuestro `main.py`. Al abrir el puerto, la placa se reinicia (`rst:0x1`) y en 1 a 2 s imprime `# camilla lista`.
+**Clases:**
 
-**Módulo de potencia:** se elige con `MODULO` en `esp32/main.py`, y se cambia en Thonny antes de cargar.
+- `PuenteH(pin_a, pin_b, pin_habilitar=None)`: un canal de L298N o un BTS7960. `"a"` extiende y `"b"` retrae; nunca los dos a la vez. Las salidas se crean en 0 (`salida_pwm`), porque algunas versiones arrancan el PWM a medias.
+- `Stepper(step, dir, en)`: el PWM en STEP da un pulso por paso y su frecuencia es la velocidad. `"a"` sube. `actualizar()` hace la rampa y solo cambia la frecuencia cada 10 pasos/s. `poner_velocidad` suma 1 si la frecuencia sería 1000 Hz, para no compartir reloj con los puentes H.
+- `ParReles(pin_a, pin_b)`: dos relés por actuador, del código del compañero. Solo con `MODULO = "reles"` (26/27 y 25/33).
+- `Seccion(pares)`: los actuadores de una sección arrancan, paran e invierten juntos. Lleva `marcha` (lo que está encendido), `pedido` (lo que pide la Raspberry), `visto` (último `M`) y `libre_desde` (fin de la pausa).
 
-- **`"puente"`**, por omisión: BTS7960 (o L298N) para **Piernas** desde el 11-11. Los dos actuadores de Piernas van en paralelo en el mismo BTS7960. Del 09-11 al 11-11 manejó Cabeza en 25 y 26.
+**Secciones creadas hoy:** `piernas` = `PuenteH(26, 27)`, `cabeza` = `PuenteH(18, 19)` y `altura` = `Stepper(25, 33, 13)`. Si el stepper falla al crearse, imprime `# altura desactivada: ...` y las otras dos siguen. Para agregar una sección se edita `SECCIONES`: el servidor la detecta sola por las líneas `E`.
 
-  | GPIO | BTS7960 | L298N | Función |
-  |---|---|---|---|
-  | 26 (`PIN_EXTENDER`) | RPWM | IN1 | Extender |
-  | 27 (`PIN_RETRAER`) | LPWM | IN2 | Retraer |
-  | `PIN_HABILITAR = None` | R_EN y L_EN a 3.3 V | ENA con jumper | Habilitar. Con un GPIO, se apaga al parar. |
-
-  Cabeza, en el mismo modo, con un L298N y 1 actuador: GPIO 18 (`CABEZA_EXTENDER`) → IN1 y GPIO 19 (`CABEZA_RETRAER`) → IN2, ENA con jumper.
-
-  Usa PWM a 1000 Hz con `VELOCIDAD = 100` %. Las salidas se crean en 0, aunque el PWM de la placa arranque a medias.
-- **`"reles"`**: el módulo de 4 relés para **Cabeza**, activo en bajo (`ACTIVO_BAJO = True`), con 26→IN1, 27→IN2, 25→IN3 y 33→IN4. Usa los mismos 26 y 27: no se pueden tener relés y BTS7960 a la vez.
-
-**Altura, desde el 13-11: motor paso a paso NEMA 17 con DRV8825** (`ALTURA_STEPPER = True`, clase `Stepper`). Si el stepper falla al crearse, se imprime `# altura desactivada` y cabeza y piernas siguen.
-
-  | GPIO | DRV8825 | Función |
-  |---|---|---|
-  | 25 (`ALTURA_STEP`) | STP | PWM: cada pulso es un paso; la frecuencia es la velocidad |
-  | 33 (`ALTURA_DIR`) | DIR | Sentido. Si "Subir" baja, `SUBIR_CON_DIR = 0` |
-  | 13 (`ALTURA_EN`) | EN | Activo en bajo: 0 = con fuerza, 1 = suelto |
-  | 3.3 V | RST + SLP | Puenteados |
-  | 4 y 35 | — | Reservados para finales de carrera (abajo y arriba); `main.py` no los usa todavía |
-
-  - Velocidad: arranca a `PASOS_INICIO = 250` y en 0.5 s (`PASOS_ACELERACION = 1500`) llega a `PASOS_VELOCIDAD = 1000` pasos/s, unas 5 vueltas/s en paso completo. A 1000 de golpe un NEMA 17 zumba y no arranca: la rampa corta hace falta. A más velocidad, menos fuerza.
-  - `MANTENER_FUERZA = True`: quieto sigue sujetando (se calienta). Al cortar la fuente lo suelta.
-  - El PWM del stepper nunca usa la misma frecuencia que los puentes H (1000 Hz): `poner_velocidad` le suma 1 para no compartir reloj.
-  - Del lado de potencia: fuente 12 V solo a VMOT/GND del driver, capacitor de 1000 µF en VMOT, motor en 1A/2A y 1B/2B. Corriente = Vref × 2. Nunca conectar o desconectar el motor con la fuente encendida.
-  - En la protoboard del usuario (disipador arriba, filas 18 a 25), a la izquierda van GND, FLT, 2A, 1A, 1B, 2B, GND y VMOT, y a la derecha DIR, STP, SLP, RST, M2, M1, M0 y EN.
-  - Sin sensor de posición: no se cuentan pasos. Para límites por software haría falta el final de carrera de abajo para poner el contador en 0.
-
-El LED azul (GPIO 2) se enciende mientras hay marcha. Para agregar una sección se edita `SECCIONES`; el servidor la detecta sola, y en la página necesita `continua` y `sinTope` en `config.js`. El modo puente con Cabeza funcionó en la placa real el 09-11. Con Piernas en 26 y 27 se probó el 11-11 en simulación (`probar_puente_piernas.py` y `probar_panel_piernas.py`, sin fallas); falta la placa real.
-
-**Protocolo por USB**, líneas terminadas en `*XX` (XOR en hexadecimal):
+**Protocolo por USB.** Una orden por línea, terminada en `*XX` (XOR de los caracteres, en hexadecimal):
 
 ```text
-Raspberry -> ESP32    M piernas 1 (extender) o M piernas -1 (retraer), repetido cada 200 ms
-                      S piernas, X (detener todo), P (sigo aquí)
-ESP32 -> Raspberry    E piernas=detenido
+Raspberry -> ESP32   M <seccion> 1    extender o subir; se repite cada 200 ms
+                     M <seccion> -1   retraer o bajar
+                     S <seccion>      detener esa sección (el servidor no la usa)
+                     X                detener todo
+                     P                sigo aquí (cuando no hay movimiento)
+ESP32 -> Raspberry   E altura=detenido cabeza=extendiendo piernas=contrayendo*XX
+                     # camilla lista | # altura desactivada: ... | # error: ...
 ```
 
-**Seguridad implementada:**
+- Responde `E` a toda línea con comprobación correcta, aunque la orden no sea válida. Las líneas con comprobación mala se ignoran (si era un `M`, la sección para sola a los 500 ms).
+- El LED azul (GPIO 2) está encendido mientras alguna sección está en marcha.
+- Ctrl+C (Thonny) detiene todo y, si el watchdog ya estaba activo, reinicia la placa para que Thonny pueda entrar. Cualquier otro error detiene todo, imprime `# error: ...` y reinicia.
 
-- Sin `M` durante 500 ms, la sección para sola.
-- Pausa de 300 ms antes de volver a arrancar o invertir.
-- Watchdog de 2 s, activado con la primera orden válida, para que Thonny pueda entrar antes.
-- Sin ESP32: `/api/estado` informa `hardware`, el panel avisa y bloquea, y el servidor no simula.
-- Órdenes numeradas (`n`): un `mover` atrasado ya no rearranca el motor.
-- **Desde el 09-11** (`99a91cf`): si el ESP32 pasa `SILENCIO_REABRIR` = 3 s sin responder, `hardware.py` cierra y reabre el puerto. Tras abrir espera hasta `ESPERA_ARRANQUE` = 6 s, porque la placa se reinicia. Los avisos son `se perdio la conexion con el ESP32: dejo de responder` y `... no respondio al abrir el puerto (revisa que tenga cargado esp32/main.py)`. Se probó con puerto simulado; en la Raspberry, todavía no.
+**No hace:** leer finales de carrera, contar pasos de la altura, medir corriente, limitar el tiempo de marcha ni informar posición. Los estados de la línea `E` llegan al servidor, pero el servidor solo usa los nombres de las secciones.
 
-**Del código del compañero:** se conservó `ParReles`, `poner_rele`, `ACTIVO_BAJO`, la pausa y los pines. Se quitó HTML, WiFi y servidor del puerto 80. Su archivo decía `_init_`; debe ser `__init__`.
+**`esp32/prueba_stepper.py`:** prueba del motor de la altura desde la consola de Thonny (F5; no se guarda como `main.py`). Órdenes `s`, `b`, `s 400`, `b 400`, `p`, `v 600`, `0` y `?`. Genera los pulsos a mano (no con PWM), con rampa y frenado, a 400 pasos/s por omisión, y para solo a los 15 s. Ya lee los finales de carrera con `USAR_FINALES = True`: normalmente abiertos a GND, GPIO 4 (abajo, con la resistencia interna) y GPIO 35 (arriba, con 10 kΩ a 3.3 V porque no tiene interna). Su docstring tiene la conexión completa del DRV8825.
 
-## Hardware
+## 4. Servidor
+
+### `web/hardware.py`
+
+- `Simulador`: no mueve nada y dice que las tres secciones existen. Se usa con `python web/servidor.py --simulador`.
+- `Esp32Serial`: un hilo propio abre el puerto, escribe y lee. `mover()` y `parar()` solo dejan la orden lista y despiertan al hilo: nunca esperan al puerto, porque se llaman con `candado` tomado.
+  - Busca el puerto por el fabricante del chip USB (CP210x `0x10C4`, CH340 `0x1A86`, FTDI `0x0403`) o usa la variable `CAMILLA_PUERTO`.
+  - Abre a 115200 con `exclusive=True` (si Thonny tiene el puerto, no lo comparte) y DTR/RTS en bajo (en alto la placa se queda reiniciando).
+  - Guarda **una sola orden** `(seccion, direccion)`. Cada 200 ms (`CADA_ORDEN`) manda `M` con esa orden, o `P` si no hay. `parar()` deja un `X` pendiente, que sale primero.
+  - El ESP32 cuenta como vivo si hubo una línea `E` válida hace menos de 1 s (`SILENCIO_MAXIMO`). `disponible(seccion)` exige que esté vivo y que haya informado esa sección.
+  - Si pasan 3 s sin respuesta (`SILENCIO_REABRIR`), cierra y reabre el puerto. Al abrir espera hasta 6 s (`ESPERA_ARRANQUE`), porque la placa se reinicia. Reintenta cada 2 s.
+  - `avisar()` anota cada mensaje una sola vez seguida: `ESP32 conectado en ...: altura, cabeza, piernas`, `el ESP32 dejo de responder`, `se perdio la conexion con el ESP32: dejo de responder`, `... no respondio al abrir el puerto (revisa que tenga cargado esp32/main.py)`, `no se encontro el ESP32 en ningun puerto USB` y `falta pyserial: sudo apt install python3-serial`.
+
+### `web/servidor.py`
+
+| Constante | Valor | Para qué |
+|---|---|---|
+| `PUERTO_WEB` | 8000 | Puerto HTTP, en todas las interfaces (`0.0.0.0`) |
+| `IP_RED` | `10.42.0.1` | IP en la red Camilla; activa la redirección del portal |
+| `TIEMPO_LIBERAR` | 10 s | Sin noticias del titular, el control se libera |
+| `ESPERA_SOLICITUD` | 35 s | Vida de un pedido de control (la página cuenta 30) |
+| `HOMBRE_MUERTO` | 1.0 s | Sin `/api/mover`, se para el motor |
+| `SESION_HORAS` | 12 h | Una sesión sin uso se borra |
+| `LIMITES` | cabeza −30 a 70, piernas 0 a 45 | Solo los usa `/api/paso` |
+
+**Estado (`Camilla`, en memoria):** `sesiones` (token → perfil), `titular`, `solicitud`, `respuestas`, `paro`, `angulos` (siempre 0: nadie usa `/api/paso`), `motor` (una sección a la vez) y `hardware`. Reiniciar el servidor borra todo esto: saca a todos y libera el paro.
+
+**Reglas:**
+
+- **Sesión:** un perfil, una sesión. Entrar desde otro dispositivo cierra la anterior, y el control no pasa al nuevo.
+- **Control:** un solo titular. Libre: lo toma quien entra (la página lo pide sola). Ocupado: solo lectura, y se puede pedir. El titular acepta o rechaza; si libera con un pedido pendiente, el control pasa a quien lo pidió. Cambiar de titular para el motor.
+- **Paro:** cualquiera lo activa o lo libera, incluso sin sesión. Activarlo para el motor y bloquea `mover` y `paso`.
+- **`vigilar()`** cada 0.5 s: hombre muerto, ESP32 perdido con motor en marcha, titular sin contacto 10 s, pedido vencido a los 35 s y sesiones de más de 12 h.
+
+**Rutas:**
+
+| Ruta | Sesión | Qué hace |
+|---|---|---|
+| `GET /api/estado` | Opcional (`X-Sesion`) | `usuario`, `nombre`, `rol`, `control {titular, usuario}`, `paro`, `simulacion`, `hardware {conectado, secciones}`, `solicitud` (solo al titular), `respuesta` (solo a quien pidió, una vez) y `telemetria {cabeza, piernas}` (siempre 0) |
+| `GET /` y archivos | No | La página compuesta; de `publico/` solo `.css`, `.js` y `.woff2` |
+| `POST /api/login`, `/api/registro` | No | Abre una sesión. El registro crea un fisioterapeuta. |
+| `POST /api/paro {activo}` | No | `activo: true` lo activa; cualquier otra cosa lo libera, también `{}` |
+| `POST /api/logout` | Sí | Cierra la sesión y libera el control si lo tenía |
+| `POST /api/control/tomar`, `solicitar`, `cancelar`, `responder {id, aceptar}`, `liberar` | Sí | Control |
+| `POST /api/mover {seccion, dir, n}`, `/api/detener {seccion, n}` | Sí | Motor continuo. `dir` es 1 o −1. Un `detener` nunca se descarta. |
+| `POST /api/paso {seccion, grados}` | Sí | Cambia `angulos`. Ninguna sección lo usa hoy. |
+| `POST /api/pacientes/lista`, `guardar`, `borrar` | Admin | Registros de pacientes |
+| `POST /api/pacientes/excel {ids}` | Admin | Devuelve un `.xlsx` (`registros-AAAA-MM-DD.xlsx`) con esos registros en ese orden. La página manda los que se ven en la tabla, con la búsqueda aplicada. Lo arma `web/excel.py` solo con la biblioteca estándar (zipfile + XML). DPI y teléfonos van como texto y las fechas como fechas. Se anota cuántos se descargaron, sin datos. |
+| `POST /api/manual {tipo}` | Sí | PDF de `web/manuales/`. Con `usuario` devuelve `manual-usuario.pdf` a cualquiera con sesión; con `tecnico` devuelve `manual-tecnico.pdf` solo a un admin (otro rol: 403). Si falta el archivo avisa "todavía no está disponible". Se lee en cada descarga, así que basta reemplazar el archivo. Lo usa el botón "Manuales" del encabezado (`vistas/manuales.js`). Los PDF se suben al repo. |
+| `POST /api/usuarios/lista`, `rol`, `activo`, `clave`, `borrar` | Admin | Perfiles. El propio no se toca, así siempre queda un administrador. Desactivar o borrar cierra su sesión. |
+
+- **Ficha en PDF:** no pasa por el servidor. El botón "Descargar" de la ficha copia la ficha a `#hojaImpresion` y llama a `window.print()`. Con `body.imprimiendo`, la regla `@media print` de `admin.css` deja solo esa hoja. Al terminar (`afterprint`, o al cerrar la ficha) se vacía.
+- JSON de más de 4096 bytes (64 KB en `/api/pacientes/excel`) o que no sea un objeto: 400. Sin sesión: 401. Sin rol de administrador: 403.
+- **Portal cautivo:** una petición que llega a 10.42.0.1 con otro `Host` (por ejemplo `captive.apple.com`) recibe un 302 a `http://10.42.0.1:8000/`, y el celular abre la página solo.
+- **Login:** PBKDF2 fuera del candado; con contraseña incorrecta espera 1 s. Perfil desactivado: no entra.
+- **Registro del sistema:** `anotar()` escribe a stderr con la hora (`journalctl -t python3` con el arranque automático). No anota las rutas de `SILENCIO` ni datos de pacientes, solo su número. `encender_red.sh` filtra estas frases: `inicio sesion`, `cerro sesion`, `creo su perfil`, `control: `, `el control a `, `PARO` y `contrasena incorrecta`.
+
+### `web/paginas.py`
+
+Compone `plantillas/index.html` resolviendo cada `<!-- incluir: ruta -->` en cada visita (al editar basta con recargar) y entrega solo `.css`, `.js` y `.woff2` de `publico/`. `camilla.db` y el código quedan fuera.
+
+## 5. Base de datos: `web/basedatos.py`
+
+- `web/camilla.db`, creada con permiso 600. Está en `.gitignore` porque tiene datos de pacientes y el repositorio es público.
+- **`usuarios`:** `id`, `usuario` (único, sin distinguir mayúsculas), `nombre`, `rol` (`admin` o `fisio`), `activo`, `sal`, `clave` (PBKDF2-HMAC-SHA256, 300 000 vueltas, sal de 16 bytes) y `creado`.
+- **`pacientes`:** todos los campos opcionales, pero hay que llenar al menos uno: nombres, apellidos, sexo (F/M), nacimiento, DPI, carné, teléfono, correo, contacto de emergencia y su teléfono, estatura (m), peso (lb), fisioterapeuta, diagnóstico, dolor (EVA de 0 a 10), próxima cita (`AAAA-MM-DD HH:MM`) y notas, más `creado` y `creado_por`.
+- La única migración es la de `pacientes` de antes del 12-11 (nombre y edad). Una columna nueva no llega sola a una base ya creada.
+- **Reglas** (las aplica el servidor; la página repite las mismas en `ui/formularios.js`, `vistas/acceso.js` y `vistas/pacientes.js`):
+  - Nombre: solo letras, de 2 a 40, sin espacios ni tildes. Usuario: minúsculas y números, de 3 a 20. Contraseña: letras y números, de 6 a 100.
+  - DPI de 13 números, teléfonos de 8, correo con `@` y punto, nacimiento no futuro y de menos de 120 años, estatura de 0.30 a 2.50 m, peso de 1 a 900 lb, dolor entero de 0 a 10, diagnóstico hasta 1000 caracteres y notas hasta 2000.
+- **Terminal:** `python3 web/basedatos.py` lista los perfiles; `admin USUARIO` lo hace administrador; `clave USUARIO` le pone otra contraseña; `revisar` solo avisa si falta un administrador.
+- `web/datos_prueba.py` agrega 20 pacientes inventados (`creado_por = "datos-de-prueba"`), y con `borrar` quita solo esos.
+
+## 6. Página: `web/plantillas/` y `web/publico/`
+
+Sin compilación: el servidor junta las plantillas y el navegador carga módulos ES, sin dependencias circulares. Bootstrap 5.3.3 y las fuentes (Barlow Condensed, IBM Plex) están en `publico/vendor/`, porque la red no tiene internet. Los módulos leen el DOM al cargarse: quitar un `id` del HTML rompe el módulo que lo usa.
+
+| Módulo (`publico/js/`) | Qué hace |
+|---|---|
+| `config.js` | `CONFIG` de cada sección, `RITMO` y tiempos |
+| `estado.js` | Estado compartido (`panel`, `control`, `sesion`) y `puedeMover()` |
+| `recepcion.js` | Aplica cada respuesta de `/api/estado` |
+| `api/cliente.js`, `sondeo.js`, `ordenes.js`, `admin.js` | Peticiones, consulta cada 1 s, órdenes y pedidos de administración |
+| `camilla/movimiento.js` | Botón sostenido, estimación, "Ir a" y paro |
+| `camilla/mandos.js` | Eventos de los botones, Esc, Plano y Bloquear |
+| `camilla/telemetria.js` | `aplicarAngulos` y la API `window.camilla` |
+| `ui/pintado.js`, `ui/dibujo.js` | Pantalla y dibujo SVG; nunca mandan órdenes |
+| `ui/modales.js`, `avisos.js`, `formularios.js`, `registro.js` | Modales, toasts, ayudas de formularios y "Registro de comandos (desarrollo)" |
+| `vistas/acceso.js`, `sesion.js`, `cesion.js`, `pestanas.js`, `pacientes.js`, `usuarios.js` | Login y registro, entrar y salir, pasar el control, pestañas por rol, pacientes y perfiles |
+
+**`config.js` hoy:**
+
+| Sección | Escala | Paso cada 70 ms | Opciones |
+|---|---|---|---|
+| `altura` | 0 a 100, sin número en pantalla | 2 | `continua`, `sinTope`, `numerica: false` |
+| `cabeza` | −30° a 70° | 1° | `continua`, `sinTope` |
+| `piernas` | 0° a 45° | 1° | `continua`, `sinTope` |
+
+- `continua`: el motor corre mientras se mantiene el botón (`/api/mover`), y la telemetría del servidor no toca esa sección. Sin `continua`, la sección mandaría un `/api/paso` por grado; no la usa ninguna.
+- `sinTope`: la estimación nunca corta el movimiento ni deshabilita el botón al llegar al límite. El motor sigue hasta que se suelta o hasta el tope interno del actuador.
+- Tiempos: `CONSULTA_MS` 1000, `FALLOS_PARA_CAIDA` 3, `MANTENER_MS` 400, `ESPERA_SOLICITUD` 30 y `ESPERA_RESPUESTA` 30. Plazos de las peticiones: 2.5 s para el estado, 8 s para login y registro, 5 s para lo demás.
+
+**Cómo se comporta hoy:**
+
+- **Estimación:** la página arranca con cabeza y piernas en 0° y la altura a media barra. Mientras se mantiene un botón suma un paso cada 70 ms: Cabeza llega de 0° a 70° en 4.9 s y Piernas a 45° en unos 3 s, pero el actuador de Cabeza tarda unos 30 s en recorrer sus 150 mm y el de Piernas unos 25 s en sus 250 mm. Las otras pantallas no ven el cambio, y al recargar vuelve a 0°.
+- **Un toque** manda `mover` y enseguida `detener`: el motor se mueve una fracción de segundo y el número sube 1°. Los textos "Un toque = 1°" y los `+1°`/`−1°` de los botones ya no corresponden.
+- **"Ir a" y "Plano 0°"** corren en la página (un paso cada 90 ms) y, con secciones `continua`, no mandan ninguna orden: solo cambian el número y el dibujo, mientras la tarjeta se ilumina y el estado dice "Ajustando a ...".
+- **Una sección a la vez:** `iniciarManual` detiene lo que estuviera en marcha antes de arrancar otra, y el servidor y `hardware.py` guardan un solo motor.
+- **Botones:** se deshabilitan sin control, con paro, con bloqueo, sin conexión, sin ESP32 o si el ESP32 no informa esa sección (aparece "Sin actuador").
+- **Hombre muerto en la página:** soltar en cualquier parte, `pointerleave`, `pointercancel`, perder el foco u ocultar la página detienen el movimiento. Salir de la pestaña Control también.
+- **Paro:** el botón rojo alterna entre activar y liberar, sin confirmación. Esc lo activa, salvo en los formularios del administrador. Hay un paro flotante en el login, sobre los modales y fuera de la pestaña Control.
+- **Bloquear** deshabilita el movimiento solo en esa pantalla.
+- **Sin conexión:** tras 3 consultas fallidas seguidas, detiene el movimiento, muestra "Sin conexión con la camilla" y bloquea. Sin ESP32: la cinta "Sin conexión con los motores" y el estado del mismo nombre.
+- **Sesión:** el token va en `sessionStorage`: cada pestaña cuenta como un dispositivo, y recargar no pide entrar otra vez.
+- **Roles:** el fisioterapeuta solo ve Control; el administrador ve Control, Registros y Usuarios.
+- **Pedido de control:** quien pide ve 30 s de espera; el titular tiene 30 s para decidir y, si no responde, se rechaza solo.
+- `window.camilla` expone `aplicarAngulos`, `topeAltura`, `estado`, `irA` y `paro` para probar desde la consola del navegador. Ningún dato del servidor llama a `topeAltura`.
+
+## 7. Red y arranque automático: `red/`
+
+| Script | Qué hace |
+|---|---|
+| `instalar_red.sh` | Una vez, con internet y `sudo`: instala hostapd y crea `/etc/hostapd/camilla.conf` (permiso 600). Red `Camilla`, Guatemala, canal 6, 802.11n, WPA2-PSK con CCMP y PMF apagado. Pide la clave (8 caracteres o más) o conserva la que ya había. Se usa hostapd porque NetworkManager agrega WPA3, que el chip de la Pi 4 maneja mal. |
+| `encender_red.sh` | Encendido a mano, sin `sudo` delante. Suelta `wlan0` de NetworkManager, pone 10.42.0.1/24, enciende hostapd y dnsmasq (DHCP 10.42.0.10–254, y todo nombre responde 10.42.0.1), redirige el puerto 80 al 8000 con nft y arranca `servidor.py`. Muestra quién se conecta; ENTER apaga todo, vuelve al WiFi anterior y guarda `~/reporte_red.txt`. No hace nada si el arranque automático está activo. No lanzarlo por SSH sobre WiFi: corta el SSH y, al morir la sesión, se apaga. |
+| `instalar_arranque.sh` | `sudo ./instalar_arranque.sh` crea y activa dos servicios: `camilla-red` (root; copia `arranque_red.sh` a `/usr/local/sbin/camilla-red`; se reinicia a los 5 s si falla) y `camilla-pagina` (el usuario que instaló, grupo `dialout`, `python3 -u servidor.py` en `web/`, sin `--simulador`; se reinicia siempre a los 3 s). No los enciende al instalar. `quitar` los borra. |
+| `arranque_red.sh` | Lo usa `camilla-red`: `iniciar` espera hasta 30 s a `wlan0` y hace lo mismo que `encender_red.sh`, sin monitor; `apagar` le devuelve el WiFi a NetworkManager. |
+
+Detener un rato: `sudo systemctl stop camilla-pagina camilla-red` (al reiniciar vuelven). Que no arranquen: `disable`. Estado: `systemctl status camilla-red camilla-pagina`. Mensajes del servidor: `journalctl -t python3 -f`. Mientras la laptop esté en la red Camilla, no tiene internet.
+
+## 8. Hardware
 
 **Actuadores** (12 V, con tope interno en los dos extremos, sin sensor de posición):
 
@@ -169,77 +260,138 @@ ESP32 -> Raspberry    E piernas=detenido
 |---|---|---|---|---|
 | Cabeza (2) | ECO-WORTHY 3000N | 150 mm (6") | 5 mm/s | 3 A máxima |
 | Piernas (2) | 1500N | 250 mm (10") | 10 mm/s | 4 A |
-| Altura | NEMA 17 (200 pasos/vuelta) con DRV8825 | según el husillo (sin medir) | 1000 pasos/s = 5 vueltas/s | según la etiqueta; Vref = corriente / 2 |
+| Altura | NEMA 17 (200 pasos/vuelta) con DRV8825 | Según el husillo (sin medir) | 1000 pasos/s = 5 vueltas/s | Según la etiqueta; Vref = corriente / 2 |
 
-- **No mezclar modelos en una sección:** uno iría al doble de velocidad y torcería la estructura.
-- El tope interno protege el final del actuador, no el de la estructura. Montado, hay que soltar antes de que la camilla llegue a su límite.
+- No mezclar modelos en una sección: uno iría al doble de velocidad y torcería la estructura.
+- El tope interno protege al actuador, no a la estructura. Montado, hay que soltar antes de que la camilla llegue a su límite.
+- Con 2 actuadores por sección y sin sensores pueden desincronizarse un poco; se corrige solo al llegar a un extremo, por el tope interno.
 - El de Piernas trae un interruptor de polaridad que no se usa.
 
 **Fuente de motores:** 12 V, 40 A, con varios pares de bornes V+ y V−.
 
-**Etapas de potencia:**
+**Conexiones conocidas al 16-11** (confirmar con el usuario si cambió algo):
 
-1. **Módulo de relés SPDT de 4 canales**, activo en bajo y con `JD-VCC`, solo Cabeza. Era para la presentación, pero ahora se prueba con el puente H. En el firmware necesita `MODULO = "reles"`.
-   - Hoy se alimenta por `VIN` del ESP32, y aguantó sin reiniciar la Raspberry.
-   - NO a +V con fusible, NC a −V, y cada actuador entre los COM de su par. El −V **no** se une con el GND del ESP32.
-   - Fusible: uno de **7.5 A retardado** en el +V de los 4 NO, o los dos de 5 A del plano de relés.
-   - TVS **SMBJ24CA**, uno por actuador, entre su cable A y su cable B, cerca del actuador.
-2. **Prueba opcional de la app: L298N.** Aguanta unos 2 A por canal, así que no sirve para estos actuadores con carga. Solo con un actuador 3000N, suelto, en un canal:
-   - IN1 a GPIO 25, IN2 a GPIO 26, puente de ENA puesto, OUT1 y OUT2 al actuador.
-   - 12V a +V con fusible de 3 A. El GND va a −V **y** al GND del ESP32. El 5V queda sin conectar, con el puente del regulador puesto.
-   - Usa `MODULO = "puente"`, que ya es el valor por omisión.
-   - Revisar que el módulo traiga sus 8 diodos y tocar el disipador durante la prueba.
-3. **Definitivo: MD-BTS7960** (43 A, 5.5 a 25 V), **uno por sección**, con los dos actuadores en paralelo: M+ a los cables A y M− a los cables B.
-   - Fusible **retardado, uno por módulo, en B+**. Así, si se funde, paran los dos actuadores juntos. **Cabeza 7.5 A y Piernas 10 A**, de vidrio 6 x 30 mm, con portafusible en línea de 15 A o más.
-   - Cable de 14 AWG para B+ y B−, y de 16 AWG a los actuadores.
-   - Sin TVS al principio: no hay contactos que chispeen y trae diodos internos. Se confirma con la prueba de conteo de errores.
-   - Control. Desde el 11-11 Piernas está programada en modo puente con los pines del compañero; Cabeza queda para después, sin programar:
+- **Piernas en el MD-BTS7960:** RPWM a GPIO 26, LPWM a GPIO 27, R_EN y L_EN a 3.3 V, VCC a 3V3 y GND al GND del ESP32. Los 2 actuadores en paralelo: M+ a sus cables A y M− a sus cables B. R_IS y L_IS sin conectar (pueden pasar de 3.3 V). En estas placas el GND de control y B− suelen estar unidos: comprobarlo con el multímetro.
+- **Cabeza en el L298N** (provisional, aguanta unos 2 A por canal): IN1 a GPIO 18, IN2 a GPIO 19, jumper de ENA puesto, OUT1 y OUT2 al actuador. 12 V con fusible de 3 A; GND a V− y al GND del ESP32; el 5V sin conectar, con el jumper del regulador puesto. Revisar que traiga sus 8 diodos y tocar el disipador al probar.
+- **Altura en el DRV8825** (placa morada con disipador; los pines tienen nombres de clon: STP, 1A/2A/1B/2B): STP a GPIO 25, DIR a 33, EN a 13, RST y SLP puenteados a 3.3 V. Fuente de 12 V solo a VMOT/GND, con un capacitor en VMOT (100 µF según `prueba_stepper.py`; en la guía se usó 1000 µF). Motor en 1A/2A y 1B/2B. Corriente = Vref × 2. Nunca conectar o desconectar el motor con la fuente encendida.
+  - En la protoboard del usuario (disipador arriba, filas 18 a 25): a la izquierda GND, FLT, 2A, 1A, 1B, 2B, GND y VMOT; a la derecha DIR, STP, SLP, RST, M2, M1, M0 y EN.
+  - Al 16-11 el stepper no se mencionó como conectado. El ESP32 igual informa `altura`, así que la página deja usarla aunque no haya motor.
 
-     | Pin del módulo | Piernas (programado) | Cabeza (hoy en L298N) |
-     |---|---|---|
-     | RPWM (extender) / IN1 | GPIO 26 | GPIO 18 |
-     | LPWM (retraer) / IN2 | GPIO 27 | GPIO 19 |
-     | R_EN y L_EN / ENA | 3.3 V | jumper puesto |
+**Definitivo (aprobado):** un MD-BTS7960 (43 A, 5.5 a 25 V) por sección, con los dos actuadores en paralelo.
 
-     El artifact del cableado BTS7960 todavía muestra la propuesta vieja (Cabeza en 25/26/27 y Piernas en 18/19/21). Manda esta tabla.
+- Fusible retardado, uno por módulo, en B+: Cabeza 7.5 A y Piernas 10 A, de vidrio 6 × 30 mm, con portafusible en línea de 15 A o más. Si se funde, paran los dos actuadores juntos.
+- Cable de 14 AWG para B+ y B−, y de 16 AWG a los actuadores.
+- Sin TVS al principio: no hay contactos que chispeen y el módulo trae diodos internos.
+- Si EN va a un GPIO, resistencia de 10 kΩ de EN a GND, para que quede apagado mientras arranca el ESP32.
+- El BTS7960 de Cabeza usaría los mismos GPIO 18 y 19 como RPWM y LPWM.
 
-   - VCC va a 3V3 del ESP32 y GND al GND del ESP32. Si EN va a un GPIO, se pone una resistencia de 10 kΩ de EN a GND, para que el módulo quede apagado mientras arranca el ESP32. R_IS y L_IS quedan sin conectar, porque pueden pasar de 3.3 V.
-   - En estas placas el GND de control y el B− suelen estar unidos: comprobarlo con el multímetro.
-   - **No conectarlo con `MODULO = "reles"`.**
+**Relés (solo historia):** el módulo de 4 relés SPDT se usó el 09-11. El firmware conserva `MODULO = "reles"` (cabeza con 26/27 y 25/33, activo en bajo). No sirve a la vez que los puentes, porque comparte pines.
 
-**Lista de compra:**
+**Pines del ESP32:**
 
-- Fusibles 6 x 30 mm retardados: 3 de 7.5 A y 3 de 10 A.
-- 2 portafusibles en línea de 6 x 30 mm, de 15 A o más.
-- 4 TVS SMBJ24CA, para la presentación con relés. El usuario pensaba comprar 8, pero con el BTS7960 no se necesitan.
-- 2 resistencias de 10 kΩ y 2 BTS7960.
-- Cable de 14 y 16 AWG.
-- Si se usa el L298N: un fusible de 3 A.
-- **De la tienda, no sirven:** TVS de 3.3, 5, 9 o 12 V (conducen con 12 V y queman el fusible), el SMBJ170CA y el 1.5KE200CA (no actúan), el SM12C (es para datos), ni un 1N4007 entre los cables del actuador (hace corto al invertir). El P6KE47CA solo sirve como provisional, y el SMF24CA sirve, aunque es más pequeño que el SMBJ24CA.
+| Uso | GPIO |
+|---|---|
+| Ocupados | 26, 27 (piernas); 18, 19 (cabeza); 25, 33, 13 (altura); 2 (LED); 1 y 3 (USB con la Raspberry) |
+| Reservados | 4 y 35: finales de carrera de la altura (abajo y arriba) |
+| Libres | 14, 16, 17, 21, 22 (21 y 22, mejor para I2C), 23, 32, 34, 36 y 39. Del 34 al 39 son solo de entrada y no tienen resistencia interna. |
+| No usar | 6 a 11 (memoria). Evitar 0, 5, 12 y 15, que son de arranque. |
 
-## Comandos
+**Lista de compra pendiente:** fusibles 6 × 30 mm retardados (3 de 7.5 A y 3 de 10 A), 2 portafusibles en línea de 15 A o más, 2 resistencias de 10 kΩ, 2 BTS7960 y cable de 14 y 16 AWG. De la tienda **no sirven**: TVS de 3.3, 5, 9 o 12 V (conducen a 12 V y queman el fusible), SMBJ170CA y 1.5KE200CA (no actúan), SM12C (es para datos), ni un 1N4007 entre los cables del actuador (hace corto al invertir).
 
-**La terminal del PC es Git Bash:** las rutas van con `/`. Con `\`, Bash se las come.
+## 9. Problemas conocidos
+
+**Seguridad** (comprobados en el código, sin resolver):
+
+1. **No hay paro físico** que corte la fuente de los motores sin depender de ninguna placa. Sin eso no se debe probar con personas.
+2. El paro se libera con un segundo toque: el botón alterna sin confirmar.
+3. El paro se libera sin sesión, y `POST /api/paro {}` también lo apaga.
+4. El paro vive en memoria: reiniciar el servidor (o que systemd lo reinicie) lo borra.
+5. El hombre muerto del servidor para entre 1.0 y 1.5 s; el ESP32 para en 0.5 s si deja de recibir.
+6. Con `sinTope` y sin sensores, nada impide que un actuador empuje contra la estructura si se mantiene el botón: solo lo frena su tope interno.
+7. No hay tiempo máximo de marcha por sección.
+
+**Lo que la pantalla muestra y no es cierto:** grados y barra de altura estimados; "Ir a" y "Plano 0°", que no mueven nada pero dicen "Ajustando a ..."; "Un toque = 1°" y `+1°`/`−1°`. Cada pantalla tiene su propia estimación.
+
+**Hardware y conexión:**
+
+- **Ruido en el USB con motores** (09-11, con relés): con solo los relés, 0 errores en 1 minuto; con actuadores, 5. El kernel registró `cp210x ttyUSB0: usb_serial_generic_read_bulk_callback - urb stopped: -32`, y después Linux deja de leer el puerto hasta reabrirlo. `hardware.py` lo reabre solo (`99a91cf`), pero cada corte detiene el movimiento unos segundos. Con el BTS7960 se espera menos ruido. **Falta contar los errores con los puentes H y la red Camilla.** La reapertura solo se probó con un puerto simulado.
+- **Thonny a veces no detiene el programa** ("Device is busy"): si la placa ya recibió órdenes, el watchdog está activo. Funciona apagar el servidor, presionar EN para un arranque limpio y luego Stop. Si falla, `mpremote`.
+- La Raspberry nunca marcó voltaje bajo con el ESP32 alimentado por su USB.
+
+**Menores:**
+
+- Registro de perfiles abierto: con la clave del WiFi cualquiera crea un perfil y mueve la camilla.
+- HTTP sin cifrar, con datos de salud. El servidor escucha en todas las interfaces: también responde por cable o por otro WiFi si la Raspberry está conectada.
+- Sin límite de intentos por IP (solo la espera de 1 s).
+- Rechaza nombres como `José`, `Peña` o `Ana Lopez`, y contraseñas con símbolos.
+- La Pi no tiene reloj propio ni NTP en la red Camilla: las fechas pueden salir mal.
+- Cargar la página hace 49 peticiones. En la Pi no se ha medido.
+- `GUIA.md` e `INTEGRACION.md` no incluyen `esp32/`, `hardware.py`, `--simulador`, `n`, `hardware` en `/api/estado`, `python3-serial`, la reapertura del puerto ni el stepper, siguen nombrando `SIMULACION` (ya no existe) y dicen "Un toque = 1°" y que no hay ESP32.
+
+**Conservar:** entrega de archivos limitada a `publico/`, SQL parametrizado, roles validados en el servidor y la máquina de estados del control.
+
+## 10. Lo que falta para terminar
+
+**Decisiones del usuario:**
+
+1. **Pantalla sin sensores:** seguir con grados estimados, pasar a SUBIENDO / BAJANDO / EN REPOSO, o poner sensores. En cualquier caso hay que decidir qué pasa con "Ir a", "Plano 0°" y los textos de 1°.
+2. **Sensores de ángulo:** si se ponen y cuál. El 11-11 el usuario eligió para Piernas un encoder óptico absoluto en código Gray, de 0° a 90°, hecho por él (en la rama `backup-cambios-esp32`, sin piezas reales). Recomendación anterior: B10K para probar; WDD35D4 o el encoder para el final; nada incremental con pacientes. Análisis completo en `git show 1eaf7a2:CONTEXTO.md`.
+3. **Perfiles:** registro abierto o que los cree el administrador.
+4. **Registro de uso:** solo cuentas y pacientes, o también un historial de quién movió la camilla y cuándo.
+5. **Altura:** qué husillo lleva (mm por vuelta) y si el NEMA 17 aguanta la camilla con una persona. Si no, NEMA 23 con reductor o actuador lineal con BTS7960. Si el husillo no es autobloqueante (paso largo, como T8×8), la camilla baja sola al cortar la energía: hace falta husillo de paso fino, freno o reductor.
+6. Si se deja la sección 11 de `INTEGRACION.md` en un documento que se va a evaluar.
+
+**Software que se puede hacer ya:**
+
+- Arreglo del paro (propuesta en la sección 13).
+- Finales de carrera de la altura en `main.py` (GPIO 4 y 35, como en `prueba_stepper.py`), informados en la línea `E` y mostrados en la página (`topeAltura`).
+- Tiempo máximo de marcha por sección en el ESP32.
+- Textos de la pantalla que no corresponden.
+- Bajar `HOMBRE_MUERTO` o revisar el servidor más seguido.
+- Aceptar tildes, ñ y espacios en los nombres.
+- Actualizar `GUIA.md` e `INTEGRACION.md`.
+- Volver a armar las pruebas en simulación: los scripts del 09-11 al 11-11 (`falsos.py`, `probar_*.py`) se perdieron con las carpetas temporales. Conviene guardarlos en el repositorio.
+
+**Hardware:**
+
+- BTS7960 de Cabeza y su segundo actuador.
+- Paro físico: hongo con contactor que corte la fuente de motores.
+- Altura con carga: mantener Subir 5 s y medir los mm. Si zumba, se atora o baja solo, `PASOS_VELOCIDAD` a 800 o 600.
+- Calibrar la estimación de Cabeza y Piernas cuando estén montadas.
+- Contar los errores USB con motores, en la red Camilla.
+- Proteger `camilla.db` contra cortes (la Raspberry arranca desde una memoria USB): copias o UPS. Reloj DS3231.
+
+## 11. Comandos
+
+**La terminal del PC es Git Bash:** las rutas van con `/`; con `\`, Bash se las come.
 
 ```bash
 python web/servidor.py                   # con ESP32 por USB
 python web/servidor.py --simulador       # sin placa; las 3 secciones simuladas
-python web/basedatos.py admin USUARIO    # primer admin, después de crear el perfil
+python web/basedatos.py admin USUARIO    # primer admin, después de crear el perfil en la página
+python web/datos_prueba.py               # 20 pacientes inventados (quitarlos: python web/datos_prueba.py borrar)
 ```
 
-Se abre en `http://localhost:8000`. Desde otro equipo se usa `http://IP-DE-LA-RASPBERRY:8000`. Si el ESP32 no se detecta solo: variable `CAMILLA_PUERTO` (por ejemplo `COM5`).
+Se abre en `http://localhost:8000`; desde otro equipo, `http://IP-DE-LA-RASPBERRY:8000`. Si el ESP32 no se detecta solo: variable `CAMILLA_PUERTO` (por ejemplo `COM5`).
 
-**Subir desde el PC** (nunca `git add .`, por `codigoesp32.txt`):
+**Subir desde el PC** (solo si el usuario lo pide; nunca `git add .`, por `compi.txt`):
 
 ```bash
-git add esp32 web CONTEXTO.md
+git add esp32 web red CONTEXTO.md        # y GUIA.md o INTEGRACION.md si cambiaron
 git commit -m "..."
-git push origin esp32-conexion
+git push origin desarrollo-final
 ```
 
-**Bajar en la Raspberry:** `cd ~/Desktop/"Proyecto Camilla" && git pull`, con internet. Con el arranque automático, la Raspberry está en la red Camilla y sin internet: antes `sudo systemctl stop camilla-pagina camilla-red` (vuelve a su WiFi) y después `sudo systemctl start camilla-red camilla-pagina`, o `sudo systemctl restart camilla-pagina` si solo cambió la página o el servidor.
+**Bajar en la Raspberry** (necesita internet; con el arranque automático está en la red Camilla, sin internet):
 
-**Cargar el ESP32 por SSH con `mpremote`** (sin Thonny ni pantalla), con la página apagada:
+```bash
+sudo systemctl stop camilla-pagina camilla-red     # vuelve a su WiFi
+cd ~/Desktop/"Proyecto Camilla"                    # o ~/Desktop/Camilla: ver la sección 12
+git fetch && git checkout desarrollo-final && git pull
+sudo systemctl start camilla-red camilla-pagina    # o solo: sudo systemctl restart camilla-pagina
+```
+
+**Cargar el ESP32 por SSH con `mpremote`** (sin Thonny ni pantalla), con la página apagada. `camilla-pagina` se reinicia sola: un `pkill` no basta.
 
 ```bash
 sudo apt install -y pipx && pipx ensurepath && pipx install mpremote     # una vez, con internet
@@ -249,329 +401,109 @@ sudo systemctl stop camilla-pagina 2>/dev/null; pkill -f servidor.py
 sudo systemctl start camilla-pagina
 ```
 
-**Cargar el ESP32 con Thonny**, que también está instalado en la Raspberry:
+**Cargar el ESP32 con Thonny** (también está en la Raspberry):
 
-1. Cerrar el servidor, porque Thonny y el servidor no pueden usar el USB a la vez.
+1. Apagar el servidor: Thonny y el servidor no pueden usar el USB a la vez.
 2. Intérprete MicroPython (ESP32) y Stop hasta ver `>>>`.
 3. View → Files → `.../esp32/main.py` → clic derecho → **Upload to /**. El 09-11, "Guardar como" pareció funcionar pero no reemplazó el archivo de la placa.
-4. Comprobar en la consola de Thonny:
-
-   ```python
-   import os; print([(n, "camilla lista" in open(n).read(), "Conectando" in open(n).read()) for n in os.listdir() if n.endswith(".py")])
-   ```
-
-   Lo correcto es `[('boot.py', False, False), ('main.py', True, False)]`.
+4. Comprobar en la consola: `import os; print([(n, "camilla lista" in open(n).read(), "Conectando" in open(n).read()) for n in os.listdir() if n.endswith(".py")])`. Lo correcto es `[('boot.py', False, False), ('main.py', True, False)]`.
 5. Presionar EN: debe salir `# camilla lista`. Si sale `Conectando a ...`, sigue el programa del compañero.
-
-**Encender con la red Camilla:** `cd red && ./encender_red.sh`. ENTER apaga. Los mensajes del servidor quedan en `journalctl -t python3 -f`. No lanzarla por SSH sobre WiFi: toma el WiFi, corta el SSH y, al morir la sesión, se apaga sola. Para hacerlo, usar cable, la pantalla de la Raspberry o `tmux`. Mientras la laptop esté en la red Camilla, no tiene internet.
 
 **Diagnóstico en la Raspberry:**
 
 ```bash
 uptime -s; vcgencmd get_throttled; ls -l /dev/serial/by-id/     # reinicio, voltaje bajo (0x0 = bien), ESP32 visto
 journalctl -k --no-pager --since "2 min ago" | grep -cE "urb stopped|USB disconnect"   # errores USB tras una prueba
-journalctl --since "15 min ago" --no-pager | grep -E "Disassociation Imminent|CTRL-EVENT-DISCONNECTED"   # cortes de Meso
-sudo fuser -v /dev/ttyUSB0      # quién tiene el puerto
+journalctl -t python3 -f                                         # mensajes del servidor
+sudo fuser -v /dev/ttyUSB0                                       # quién tiene el puerto
 ```
 
-El 09-11 quedaron corriendo dos registros en segundo plano: `~/monitor_kernel.txt` y `~/monitor_voltaje.txt`, este con una muestra cada 0.5 s. Para detenerlos:
+El 09-11 quedaron corriendo dos registros en segundo plano (`~/monitor_kernel.txt` y `~/monitor_voltaje.txt`). Para detenerlos: `pkill -f "vcgencmd get_throttled"` y `pkill -f "journalctl -kf"`.
+
+**Preparar otra Raspberry** (con internet, desde la carpeta del proyecto):
 
 ```bash
-pkill -f "vcgencmd get_throttled"
-pkill -f "journalctl -kf"
-```
-
-## Preparar la Raspberry
-
-Hecho el 09-11 y todo salió bien. Para repetirlo en otra Raspberry, con internet y desde la carpeta del proyecto:
-
-```bash
-git fetch origin && git checkout esp32-conexion && git pull
-
 python3 --version                                       # 3.8 o mayor
-ls web/hardware.py esp32/main.py                        # deben existir
 python3 -c "import serial; print(serial.__version__)"   # si falla: sudo apt install -y python3-serial
 id -nG | grep -w dialout                                # si no sale: sudo usermod -aG dialout $USER && sudo reboot
 command -v hostapd dnsmasq nft nmcli                    # si falta: sudo apt install -y hostapd dnsmasq-base nftables network-manager
 sudo test -e /etc/hostapd/camilla.conf && echo Lista    # si no: cd red && sudo ./instalar_red.sh
-ls -l /dev/serial/by-id/                                # con el ESP32 conectado: línea con CP2102 o CH340
+cd red && sudo ./instalar_arranque.sh                   # arranque automático
 ```
 
-Si `/dev/ttyUSB0` aparece y desaparece: `sudo apt remove -y brltty`. Los cambios no se copian desde Windows: los `.sh` quedarían con CRLF.
+Si `/dev/ttyUSB0` aparece y desaparece: `sudo apt remove -y brltty`. No copiar los `.sh` desde Windows: quedarían con CRLF.
 
-## Problemas encontrados
+## 12. Raspberry real
 
-**Seguridad (comprobados y sin resolver)**
+- Usuario `diegocardona`. Las notas anteriores nombran la carpeta del proyecto como `~/Desktop/Camilla` y como `~/Desktop/"Proyecto Camilla"`: confirmar cuál es.
+- **Rama instalada: sin confirmar.** La presentación del 13-11 se hizo con `muestra-citein`; para seguir hay que llevarle `desarrollo-final`.
+- Python 3.13, pyserial 3.5, permiso `dialout`, hostapd, dnsmasq, nft y nmcli instalados. Red Camilla y arranque automático instalados y funcionando (12-11).
+- El ESP32 aparece como `CP2102` (`10c4:ea60`) en `/dev/ttyUSB0`.
+- Se usa con pantalla, teclado y mouse USB, y por SSH desde la laptop.
+- **WiFi Meso:** IP por DHCP (fue `172.17.71.64`). Meso saca a la Raspberry cada 30 s más o menos (`WNM: Disassociation Imminent`) y se cae el SSH; no es falla de la Raspberry. Para SSH estable, cable de red.
+- El registro del sistema no es persistente: reiniciar borra la evidencia, incluido `vcgencmd get_throttled`.
+- `Connection closed by ... port 22` suele significar que la Raspberry se está reiniciando.
+- El USB-C de la Pi 4 es solo de alimentación.
 
-1. Un doble toque en Paro lo libera: el botón alterna sin confirmar.
-2. El paro se libera sin sesión, y `POST /api/paro {}` también lo apaga.
-3. El paro vive en memoria: reiniciar el servidor lo borra.
-4. El hombre muerto del servidor para entre 1.0 y 1.5 s. El ESP32 para en 0.5 s si deja de recibir.
+## 13. Decisiones y propuestas
 
-Falta un paro físico que corte la energía de los motores sin depender de ninguna placa. Sin eso no se debe probar con personas. Los actuadores traen tope interno, pero si la estructura llega antes a su límite, el actuador empuja contra ella: hay que soltar el botón.
+**Tomadas:**
 
-**Hardware y conexión (09-11)**
-
-- **Ruido en el USB con motores:** con solo los relés hubo 0 errores en 1 minuto; con actuadores, 5, aun con los cables separados. A las 14:48 también se cayó el teclado USB, sin que nadie lo tocara. El kernel registró `cp210x ttyUSB0: usb_serial_generic_read_bulk_callback - urb stopped: -32`, y después de eso Linux deja de leer el puerto hasta reabrirlo. `99a91cf` hace que se recupere, pero no quita el ruido: cada corte detiene el movimiento unos segundos. Causa probable: chispas en los contactos de los relés. Medidas: TVS, separar cables, aislar el módulo con `JD-VCC` y 5 V aparte, ferrita en el USB, y con el BTS7960 se espera menos ruido.
-- **Thonny a veces no logra detener nuestro programa:** muestra "Device is busy". La explicación probable es el watchdog. Si la placa ya recibió órdenes, el watchdog está activo: al interrumpir, el programa reinicia la placa a propósito, y en la consola el watchdog la reiniciaría a los 2 s.
-  - El 09-11 en la tarde funcionó así: con el servidor apagado, presionar EN para un arranque limpio sin órdenes, y luego Stop.
-  - Si aun así falla: usar `mpremote`, o agregar al firmware unos segundos al arrancar en los que se pueda interrumpir.
-- **El primer corte de SSH (12:53) no tiene explicación:** no hubo reinicio, voltaje bajo ni eventos de WiFi registrados. Los dos "reinicios" posteriores los hizo el usuario a mano.
-- La Raspberry nunca marcó voltaje bajo con el ESP32 y el módulo de relés alimentados por su USB.
-
-**Bloquean lo que falta del hardware**
-
-- Sin sensores, los ángulos de cabeza son estimados: "Ir a" y "Plano 0°" no mueven nada, y los textos de ±1° ya no aplican.
-- La estimación de Cabeza llega a 70° en 4.9 s, pero el 3000N tarda unos 30 s en recorrer sus 150 mm. Hay que calibrarla cuando esté montado.
-- La altura ya tiene `sinTope` en `publico/js/config.js` (13-11), como Cabeza y Piernas. Piernas lo tiene desde el 11-11. Su estimación llega a 45° en unos 3 s, pero el actuador de 1500N tarda unos 25 s en recorrer sus 250 mm: hay que calibrarla al montarlo.
-- `Camilla.motor` admite un motor: basta mientras se mueva una sección a la vez.
-- Con 2 actuadores por sección y sin sensores pueden desincronizarse un poco. Se corrige solo al llegar a un extremo, por el tope interno.
-
-**Menores**
-
-- Registro de perfiles abierto: con la clave del WiFi se puede mover la camilla. Cerrarlo antes del uso real.
-- HTTP sin cifrar, con datos de salud.
-- Sin límite de intentos por IP.
-- Rechaza `José`, `Peña`, `Ana Lopez` y contraseñas con símbolos.
-- La Pi no tiene reloj propio ni NTP en la red Camilla: las fechas pueden salir mal.
-- Sin migraciones: una columna nueva no llega a una base ya creada.
-- Cargar la página hace 49 peticiones (antes 16). Por túnel de VS Code se quedaba en blanco por pérdida de conexión; se decidió no optimizarlo. En la Pi no se ha medido.
-
-**Conservar:** entrega de archivos limitada a `publico/`, SQL parametrizado, roles validados en el servidor y la máquina de estados del control.
-
-## Decisiones
-
-**Tomadas**
-
-- El admin controla la camilla y ve registros.
-- El servidor lo levanta el usuario, desde la pantalla de la Raspberry.
-- USB entre Raspberry y ESP32, con `pyserial`. WebSocket va después.
-- La red final es local, sin internet.
-- `codigoesp32.txt` no se agrega a `.gitignore`; solo sirve de referencia. No se sube.
-- Cabeza usa los 2 actuadores 3000N y Piernas los 2 de 1500N.
-- Los relés son solo para la presentación. El definitivo es un BTS7960 por sección, con los actuadores en paralelo y un fusible retardado por módulo.
+- El administrador controla la camilla y ve los registros.
+- Raspberry y ESP32 por USB serie con `pyserial`. WebSocket, después.
+- Red local propia, sin internet. Arranque automático con systemd (12-11).
+- Cabeza con los 2 actuadores 3000N y Piernas con los 2 de 1500N.
+- Definitivo: un BTS7960 por sección, con los actuadores en paralelo y un fusible retardado por módulo.
+- Altura con NEMA 17 y DRV8825 (13-11).
 - El servidor reabre el puerto si el ESP32 se queda mudo (`99a91cf`).
-- **11-11:** Piernas mide su ángulo con un encoder óptico absoluto en código Gray, hecho por el usuario. El rango de Piernas pasa a ser **0° a 90°**. `CONFIG` y `LIMITES` siguen en 0–45 hasta integrarlo.
+- `compi.txt` no se agrega a `.gitignore` y no se sube.
 
-**Dejadas para después por el usuario**
+**Propuesta del paro (sin aprobar):** el botón rojo solo activa; liberar va aparte, con confirmación y con sesión; `POST /api/paro` sin `activo` booleano responde 400; el paro se guarda en SQLite para que sobreviva a un reinicio.
 
-- Sensores, "Ir a" y grados reales.
-- Finales de carrera propios y tiempo máximo de marcha.
-- Arreglo del paro.
-- Actualizar `GUIA.md` e `INTEGRACION.md`.
-- Cabeza con su propio BTS7960: después de Piernas.
+**Otras propuestas (sin aprobar):** `wlan0` fijo, watchdog de la Pi, copias de `camilla.db` o UPS, reloj DS3231, dos administradores y una hoja junto a la camilla con cómo reiniciar. Más adelante, R_IS y L_IS del BTS7960 podrían detectar un atasco, con divisor a 3.3 V.
 
-**Pendientes**
+**FastAPI y WebSocket (12-11):** no son alternativas: FastAPI es el framework y WebSocket la forma de comunicación. Si se mejora, empezar por WebSocket solo para avisos (estado, paro y pedidos de control) con `aiohttp` (`apt install python3-aiohttp`) en el mismo puerto, y mantener `POST /api/paro` como segunda vía. El hombre muerto igual necesita su latido. FastAPI, solo si el proyecto crece.
 
-1. "Registro": ¿solo cuentas y pacientes, o también historial de uso?
-2. Perfiles: ¿registro abierto o los crea el admin?
-3. ¿Se deja la sección 11 de `INTEGRACION.md` si el documento se va a evaluar?
-4. ¿`master` se queda con grados estimados o pasa a la interfaz sin ángulos de `muestra-citein`?
-5. ¿Qué husillo lleva la altura y aguanta el NEMA 17 la camilla con una persona? Si no, NEMA 23 con reductor o un actuador lineal con BTS7960.
+## 14. Guías publicadas
 
-## Propuestas (sin aprobar, nada implementado)
+Privadas de la cuenta del usuario. Algunas muestran planes viejos (por ejemplo, el cableado BTS7960 tiene Cabeza en 25/26/27 y Piernas en 18/19/21): manda este archivo.
 
-**Arreglo del paro:** el botón rojo solo activa; liberar va aparte, con confirmación y sesión; `POST /api/paro` sin `activo` booleano responde 400; se guarda en SQLite.
-
-**Después del arranque automático** (los servicios ya existen desde el 12-11): `wlan0` fijo, watchdog de la Pi, almacenamiento protegido contra cortes (la Raspberry arranca desde una memoria USB: un corte de luz puede dañar `camilla.db`; sacar copias o poner un UPS), reloj DS3231, dos administradores y una hoja junto a la camilla para reiniciar.
-
-### FastAPI y WebSocket (conversación del 12-11)
-
-**Decisión:** no tocar nada antes de la presentación del 13-11. Retomarlo después.
-
-- **No son alternativas entre sí.** FastAPI es el framework del servidor y WebSocket es la forma de comunicación. FastAPI también maneja WebSocket.
-- **Cómo es hoy:** `http.server` de la biblioteca estándar, sin dependencias, lo que es una ventaja en una Raspberry sin internet. Cada página consulta `/api/estado` una vez por segundo. El hombre muerto repite `mover` cada 400 ms y el servidor corta el motor tras 1 s sin noticias. El paro va directo y corta al instante.
-- **FastAPI aportaría:** validación automática, documentación de la API y código más ordenado. **Cuesta:** instalar paquetes (`fastapi`, `uvicorn`) con internet al menos una vez y reescribir `servidor.py` (unas 480 líneas), con las sesiones y el control. Es una mejora de comodidad, no de funcionamiento.
-- **WebSocket aportaría:** avisos al instante a todas las pantallas (paro, solicitud de control, cambio de titular), que hoy llegan con hasta 1 s de retraso, y menos tráfico en el WiFi. **Cuesta:** manejar reconexiones. El hombre muerto igual necesita un latido, porque si el WiFi se cae la conexión no siempre avisa enseguida: la seguridad casi no mejora, lo que mejora es la experiencia.
-- **Recomendación:**
-  1. Si se mejora, empezar por WebSocket solo para avisos (estado, paro y solicitudes de control) y dejar el resto igual.
-  2. FastAPI solo si el proyecto crece (más pantallas, más API o más gente programando). En ese caso, hacerlo junto con WebSocket, para reescribir una sola vez.
-- **Opción sin FastAPI:** `aiohttp` en el mismo puerto (`apt install python3-aiohttp`). Pasa de hilos a asyncio. En la página cambian `api/sondeo.js` y `api/ordenes.js`. Mantener `POST /api/paro` como segunda vía.
-
-**Hardware final, además del BTS7960:** paro de hongo con contactor que corte la fuente de motores. Pines ocupados o reservados (16-11): Piernas 26 y 27; Cabeza 18 y 19; Altura (DRV8825) 25, 33 y 13, con finales de carrera en 4 y 35; encoder 32, 23 y 34. No usar 1 y 3 (USB a la Raspberry) ni 6 a 11 (memoria). Quedan libres 14, 16, 17, 21 y 22 (estos dos, mejor guardarlos para I2C), y 36 y 39 para sensores; del 34 al 39 son solo de entrada. Evitar 0, 2, 5, 12 y 15, que son pines de arranque. Más adelante, R_IS y L_IS podrían detectar un atasco, con divisor a 3.3 V.
-
-### Encoder de piernas (diseñado el 11-11, sin probar con piezas reales)
-
-Guía visual paso a paso: https://claude.ai/artifact/MAu8PJ5JfVQvSUGJZH4XQU (materiales, impresión, cableado, montaje, Thonny y medidas para la camilla). Fuente local de la guía y de sus imágenes: carpeta temporal de la sesión, no está en el repo.
-
-- **Código:** 6 bits en código Gray, 2° por código. El código k cubre [−19 + 2k, −17 + 2k): 0° es el código 9 y 90° el 54. Cubre de −19° a 109°, con un error máximo de 1°. El código 0 no se fabrica: se lee igual que si no hubiera sector y significa "fuera de rango".
-- **Pistas:** el bit 0 va afuera, a 65 mm del eje, y cada bit siguiente 5 mm más adentro, hasta el bit 5 a 40 mm. Las ventanas miden 4 mm de ancho, con 1 mm de material entre pistas. Hay un canal de referencia a 77 mm, fuera del sector, que siempre ve luz. El sector mide 71.5 mm de radio y 3 mm de espesor.
-- **Óptica:** 7 LED IR de 3 mm (940 nm) arriba y 7 fototransistores abajo, cada uno detrás de una ranura de 1 × 3 mm. Con luz, el canal lee 0; tapado, lee 1.
-- **Electrónica:**
-  - LED con 150 Ω a 3.3 V.
-  - Fototransistores con 10 kΩ a 3.3 V; se cambian por 22k o 47k si con luz no bajan de 0.8 V.
-  - Un 74HC165:
-    - A..F = bits 0..5 y G = referencia.
-    - H fijo a 3.3 V, y SER y CLK INH a GND.
-    - SH/LD al GPIO 32, CLK al GPIO 23 y QH al GPIO 34, con 100 kΩ a GND.
-  - Se leen 9 bits: H, G, F..A, SER.
-  - Si H no lee 1 o SER no lee 0, es falla de cable o del chip. Si G no lee 0, los LED están apagados.
-- **Banco:**
-  - Base de 178 × 148 mm, que entra en una cama de 180.
-  - Tornillo M8 × 40 con la cabeza trabada abajo, rodamiento 608 en el buje del sector, separador, arandela y tuerca.
-  - Horquilla de 2 brazos de 8 mm, con 2 mm de aire a cada lado del sector, atornillada con 2 M3 al soporte de la base.
-  - Topes a −15° y 105°.
-  - Escala de 2 en 2 grados, con números cada 10.
-  - Todo sin soportes. Sector y horquilla en **PLA negro**.
-- **Comprobado en el PC** (scripts `verificar.py` y `render.py` en la carpeta temporal, no en el repo):
-  - La geometría real del sector, leída cada 0.05° entre −15° y 105° a través de un 74HC165 simulado con `prueba_encoder.py`, da el código correcto, con un error máximo de 1°.
-  - La referencia nunca queda tapada.
-  - Se detectan los fallos de cable y de LED.
-  - Nada choca entre los topes.
-  - **Falta todo con piezas reales.**
-- **Pendiente:**
-  - Medidas de la bisagra para los soportes de la camilla: eje, espacio libre de unos 75 mm de radio, tubos, juego lateral, ángulos reales y fotos.
-  - Calibrar `CERO` y `SENTIDO`.
-  - Integrarlo a `esp32/main.py`, al protocolo (enviar el ángulo), al servidor y a la página.
-  - Pasar `CONFIG`/`LIMITES` de Piernas a 0–90.
-- **Si se cambian `BITS`, `GRADOS_POR_CODIGO` o `ANGULO_INICIO`**, hay que cambiarlos igual en `generar_piezas.py` y en `prueba_encoder.py`, y regenerar los STL.
-
-### Sensores de ángulo (conversación del 10-11)
-
-Es para mostrar grados reales, para que "Ir a" y "Plano 0°" muevan de verdad, y para límites por software que protejan la estructura. Hoy el tope interno solo protege al actuador. Cambiaría el firmware (leer y enviar el ángulo), el servidor y la página. Está en lo que el usuario dejó para después: **no se ha tocado código**.
-
-**Qué se necesita medir**
-
-- Cabeza va de −30° a 70° (100° en total) y Piernas de 0° a 45° (`web/publico/js/config.js`).
-- Ninguna da una vuelta completa, así que basta un sensor de menos de una vuelta, montado en la bisagra de cada sección. Va uno por sección, no por actuador, así que no detecta si los dos actuadores se desincronizan.
-- **Precisión:** para un fisioterapeuta alcanzan unos ±2–3°. Pesa más que la misma posición se repita en cada sesión que el número exacto.
-  - Posiciones habituales de Cabeza: semi-Fowler 30–45°, Fowler 45–60°, Fowler alta 60° o más, y Trendelenburg de −10° a −30°.
-  - Piernas se elevan entre 15° y 45°.
-  - La medición con goniómetro ya tiene unos ±5° de error.
-  - Hay que confirmarlo con un fisio del centro: qué ángulos usa, si importa el número exacto o repetir la posición, y si quiere posiciones guardadas.
-  - La página muestra pasos de 1° y el objetivo original decía ±1°. Si ±2° basta, conviene cambiar ese texto.
-- **Lo que decide el sensor no es la precisión.** Decide que sepa la posición al arrancar (el ESP32 se reinicia al abrir el puerto, por el watchdog o si se va la luz), que detecte un cable cortado y que dure.
-
-**Opciones vistas**
-
-1. **Potenciómetro de 360° sin tope, de plástico conductivo (WDD35D4, 5k o 10k): recomendado para el final.**
-   - Sabe la posición siempre y dura millones de ciclos.
-   - No tiene tope, así que no se rompe si la bisagra se pasa.
-   - Usa 3 cables.
-2. **Potenciómetro B10K (el usuario tiene): sirve para probar.** Se conecta igual que el WDD35D4, así que el código servirá para los dos.
-   - Ventajas:
-     - Sabe la posición siempre.
-     - Es simple.
-     - Da ±1° fácil: unos 13–15 pasos del ADC por grado.
-   - Desventajas:
-     - Pista de carbón de unos 10 000 ciclos, así que dura meses.
-     - Tiene tope mecánico, por lo que hay que montarlo centrado.
-     - Con el desgaste "rasca" y hay que filtrar la lectura.
-     - Su eje no aguanta esfuerzo de lado y necesita acople.
-     - No es sellado.
-   - **Conexión:**
-     - Un extremo a **3.3 V, nunca 5 V**, y el otro extremo a GND.
-     - El centro al GPIO 34 para Cabeza o al GPIO 35 para Piernas.
-     - Un capacitor de 100 nF y una resistencia de 1 MΩ, los dos del centro a GND, cerca del ESP32.
-     - Cable trenzado o apantallado, con la malla a GND solo del lado del ESP32.
-   - **Montaje:** la sección a mitad de rango (Cabeza a unos 20°) con el potenciómetro a mitad de giro (unos 1.65 V), y el eje alineado con la bisagra mediante un acople.
-   - **Calibración:** 2 o 3 puntos medidos con el inclinómetro del celular.
-   - **Seguridad:** el rango normal nunca llega a 0 V ni a 3.3 V. Si la lectura llega ahí, es un cable cortado o un corto, y el motor debe parar.
-3. **AS5600 magnético:**
-   - Ventaja: no tiene contacto, así que no se gasta.
-   - Exige que el imán quede centrado a 0.5–3 mm del sensor.
-   - Usar la salida analógica OUT: por I2C los dos sensores tienen la misma dirección (0x36).
-   - El pin DIR va a GND.
-4. **MPU6050 (acelerómetro):**
-   - Ventaja: mide la inclinación respecto a la gravedad y no necesita eje.
-   - Desventaja: usa I2C con un cable largo junto a los motores, y ya hubo ruido en el USB. Es arriesgado.
-5. **HW-040 (encoder mecánico tipo KY-040; el usuario tiene): solo para practicar.**
-   - Ventajas:
-     - Gira sin tope.
-     - Es digital, sin el ADC.
-   - Desventajas:
-     - Es incremental, así que pierde la posición en cada reinicio y hay que llevar la sección al tope (unos 30 s en Cabeza).
-     - Da 18° por paso, o unos 4.5° contando todos los flancos.
-     - Rebota y pierde pasos con ruido.
-     - No detecta un cable cortado.
-     - Se gasta (15 000–30 000 giros).
-     - Su código es más complejo.
-   - Si se usa: + a 3.3 V, CLK al GPIO 34 y DT al GPIO 35 (el módulo trae pull-ups). Para Piernas, GPIO 36 y 39.
-   - **Guardar la posición por código:**
-     - Se guardaría en la Raspberry, que no se reinicia con el ESP32, y solo con el motor quieto.
-     - Los actuadores no se mueven a mano, por el engranaje sin fin.
-     - Resuelve el reinicio al abrir el puerto.
-     - No resuelve:
-       - Los pasos perdidos, porque se guardaría el valor ya equivocado.
-       - Un corte en movimiento.
-       - Que nadie puede verificar si el número está bien, y eso es riesgo con paciente.
-       - La resolución.
-     - Parches posibles:
-       - Marcar la posición como dudosa si hubo un reinicio en marcha.
-       - Recalibrar en el tope cuando el motor anda y el encoder no cuenta.
-       - Usar engranajes.
-6. **Encoder óptico diseñado por el usuario (pregunta abierta):**
-   - **Incremental** (disco con ranuras y 2 sensores en cuadratura):
-     - Ventajas sobre el HW-040: no rebota ni se gasta, y la resolución es libre.
-     - Pero pierde la posición igual y no detecta fallas.
-     - Se puede agregar una ranura de referencia a mitad del recorrido, para ubicarse con un movimiento corto.
-     - No vale la pena.
-   - **Absoluto en código Gray: buena opción si el proyecto valora el diseño propio.**
-     - Sabe la posición siempre.
-     - En código Gray cambia un solo bit por paso.
-     - Detecta fallas por saltos imposibles.
-     - Necesita 6 pistas y 6 sensores para ±2° (100° / 2° son 50 posiciones), o 7 para 1°.
-   - **Diseño:**
-     - Un sector de radio grande en vez de un disco completo. Con 100 mm de radio, 1° equivale a 1.75 mm de arco.
-     - Sensores de horquilla (H21A1 o módulos LM393), no reflectivos TCRT5000, que fallan con luz ambiente y suciedad.
-     - Caja cerrada contra polvo, luz y alcohol.
-     - Alimentación a 3.3 V, o un divisor en las salidas si van a 5 V.
-     - Un **74HC165** para leer los 6 bits con 3 pines, encadenable entre las dos secciones. Mejor que un expansor I2C.
-   - Desventajas frente al WDD35D4: tiempo de diseño, precisión mecánica, y más cables y piezas.
-
-**Recomendación dada:**
-- Para probar ya, el B10K.
-- Para el final, el WDD35D4, o el óptico absoluto en código Gray si se quiere diseño propio.
-- No usar algo incremental (HW-040 u óptico incremental) con pacientes.
-
-## Documentación pendiente
-
-`GUIA.md` e `INTEGRACION.md` no incluyen `esp32/`, `web/hardware.py`, `--simulador`, `n`, `hardware` en `/api/estado`, `python3-serial`, la reapertura del puerto, ni que `SIMULACION` ya no existe. El usuario pidió dejarlo para después.
-
-## Guías publicadas
-
-- Puesta en marcha (pasos, Raspberry, conexiones): https://claude.ai/artifact/HghKdvTRKGM1bepkxkPx92
+- Puesta en marcha: https://claude.ai/artifact/HghKdvTRKGM1bepkxkPx92
 - Plan general de integración: https://claude.ai/artifact/6Yo3eoRURGcjXuc5KChWrS
-- Cableado con relés, fusibles y TVS (presentación): https://claude.ai/artifact/1Gk6CeN5LLnTMpQpNV2bqg
+- Cableado con relés, fusibles y TVS: https://claude.ai/artifact/1Gk6CeN5LLnTMpQpNV2bqg
 - Cableado final con BTS7960: https://claude.ai/artifact/BPPDzhjXEg8qiHQrK63hmF
-- Encoder de piernas (banco de prueba, paso a paso): https://claude.ai/artifact/MAu8PJ5JfVQvSUGJZH4XQU
-- Stepper de la altura (DRV8825 en la protoboard, Vref, micropasos): https://claude.ai/artifact/AW9F4AJEpPeUgS7757k2Cr
-- Puente H de las piernas (BTS7960 con 2 actuadores, simulador): https://claude.ai/artifact/1vXRyzqTNfADsvsiMQrvpW
+- Encoder de piernas: https://claude.ai/artifact/MAu8PJ5JfVQvSUGJZH4XQU
+- Stepper de la altura (DRV8825, Vref, micropasos): https://claude.ai/artifact/AW9F4AJEpPeUgS7757k2Cr
+- Puente H de las piernas (BTS7960 con 2 actuadores): https://claude.ai/artifact/1vXRyzqTNfADsvsiMQrvpW
 
-Son privadas de la cuenta del usuario.
-
-## Para la próxima Claude
+## 15. Para la próxima Claude
 
 - Responder en español. Lo que escribe el usuario manda sobre las guías.
+- Trabajar en `desarrollo-final`. No tomar otras ramas como referencia salvo que el usuario lo pida.
 - Decir si algo se puede y cómo antes de modificar, salvo que lo pida directo.
-- No crear ni editar `CLAUDE.md`: el usuario prefirió este archivo.
+- No hacer commit ni push sin que lo pidan. Nunca `git add .`: el repositorio es público y `compi.txt` tiene la clave del WiFi.
+- No crear ni editar `CLAUDE.md`: el usuario prefiere este archivo.
+- `web/camilla.db` tiene datos de pacientes: no se sube. Para probar, datos inventados (`datos_prueba.py`).
 - `GUIA.md` e `INTEGRACION.md` describen solo lo que existe, sin hipótesis ni planes.
 - Desde el PC, nada de red o hardware se da por probado.
 - Python 3.8+ y solo biblioteca estándar, salvo `pyserial`. El firmware es MicroPython: sin f-strings ni funciones que no existan allí.
-- No hacer commit ni push sin que lo pidan.
-- El usuario prefiere manejar todo desde la página antes que pruebas sueltas en Thonny: las partes nuevas se integran a `main.py` y se prueban con la página.
-- **Al guiar en el hardware:** el usuario prefiere pasos numerados que digan dónde se hace cada uno: terminal SSH, pantalla de la Raspberry, Thonny, la mesa o el chat. Hay que pedirle la salida en cada punto de control.
-- **Antes de concluir que la Raspberry se reinició sola, preguntar si la reinició el usuario.** El 09-11 eso llevó a dos conclusiones equivocadas.
-- Ante algo raro, pedir que no reinicie ni desconecte hasta capturar `uptime -s`, `get_throttled` y `journalctl`.
-- Para probar sin tocar el repo: copiar `web/` y `esp32/` a una carpeta temporal, sin `camilla.db`. El firmware corre en CPython con módulos falsos `machine` y `time`; `hardware.serial` se reemplaza por un puerto falso conectado a él. Los scripts (`falsos.py` con `PWM` falso, `probar_esp32.py`, `probar_panel.py`, `probar_reabrir.py` y `probar_puente.py`) estaban en una carpeta temporal y no están en el repo. `probar_esp32.py` y `probar_reabrir.py` esperan `MODULO = "reles"`.
-- **Piernas (11-11):** `probar_puente_piernas.py`, `probar_panel_piernas.py` (Chrome real; guion `e3.js`; con `PYTHONIOENCODING=utf-8` en Windows) y la copia `copia_piernas/` están en la carpeta temporal.
-- **Encoder:** está en la rama `backup-cambios-esp32`. `encoder/generar_piezas.py` usa `manifold3d` (instalado en un venv de la carpeta temporal). El 11-11 no se pudo ejecutar OpenSCAD descargado: el clasificador lo bloqueó. Las imágenes de la guía salen de un renderizador propio en numpy (`render.py`, en la carpeta temporal).
+- El usuario prefiere manejar todo desde la página antes que pruebas sueltas en Thonny: lo nuevo se integra a `main.py` y se prueba con la página.
+- **Al guiar en el hardware:** pasos numerados que digan dónde se hace cada uno (terminal SSH, pantalla de la Raspberry, Thonny, la mesa o el chat), pidiendo la salida en cada punto de control.
+- Antes de concluir que la Raspberry se reinició sola, preguntar si la reinició el usuario. Ante algo raro, pedir que no reinicie ni desconecte hasta capturar `uptime -s`, `get_throttled` y `journalctl`.
+- Para probar sin tocar el repositorio: copiar `web/` y `esp32/` a una carpeta temporal, sin `camilla.db`. El firmware corre en CPython con módulos falsos `machine` (`Pin`, `PWM`, `WDT`, `reset`) y `time` (`ticks_ms`, `ticks_diff`, `ticks_add`, `sleep_ms`), y `hardware.serial` se reemplaza por un puerto falso conectado a él.
 
-**Trampas del código**
+**Trampas del código:**
 
-- `git add .` subiría la clave del WiFi; el repositorio es público.
-- `encender_red.sh` filtra el texto de `anotar()` y la línea `"GET / `: cambiar esas frases rompe su monitor.
-- `CONFIG.altura.numerica = true` rompe la página con un `TypeError`.
-- `LIMITES` y `CONFIG` (`publico/js/config.js`) se cambian juntos, igual que la validación de `basedatos.py`, `ui/formularios.js` y `vistas/acceso.js`.
-- En `muestra-citein` ya no existen los id de grados (`valCabeza`, `objCabeza`, `campoCabeza`, `irCabeza`, `minCabeza`, `btnPlano`...). El estado de Cabeza y Piernas va en `movCabeza` / `txtMovCabeza` (y lo mismo para Piernas). La animación del diagrama está en `ui/dibujo.js` (`RECORRIDO`, `BUCLE_MS`, `FINAL`).
-- `continua` hace que una sección use `mover`, y la telemetría ya no la toca. `sinTope` evita que la página corte el movimiento por su estimación y que deshabilite el botón pulsado.
-- Si se deshabilita un botón mientras se mantiene pulsado, puede no llegar el `pointerup`.
-- `esp32/main.py` manda en qué secciones existen: las informa en cada línea `E`.
+- `esp32/main.py` decide qué secciones existen: las informa en cada línea `E`, y la página muestra "Sin actuador" para las que falten.
+- `hardware.py` guarda una sola orden y el servidor un solo `motor`: hoy no se pueden mover dos secciones a la vez.
+- `aplicarAngulos` (`camilla/telemetria.js`) ignora las secciones `continua`. Si llegan ángulos reales, hay que cambiar esa condición y la de `darPaso` (`if (!c.continua)`).
+- `LIMITES` (`servidor.py`) y `CONFIG` (`config.js`) se cambian juntos, igual que las reglas de `basedatos.py`, `ui/formularios.js`, `vistas/acceso.js` y `vistas/pacientes.js`.
+- `CONFIG.altura.numerica = true` rompe la página con un `TypeError`: la altura no tiene esos elementos en el HTML.
+- Si se deshabilita un botón mientras se mantiene pulsado, puede no llegar el `pointerup`. Por eso existe `sinTope`.
 - Una orden `detener` nunca se descarta, aunque su número sea viejo.
-- Al abrir el puerto, el ESP32 se reinicia. Por eso `ESPERA_ARRANQUE` (6 s) es mayor que `SILENCIO_REABRIR` (3 s): con menos, se quedaría reabriendo en bucle.
-- `avisar()` no repite el mismo mensaje seguido: un fallo que se repite sale una sola vez en la terminal.
-- El USB-C de la Pi 4 es solo de alimentación.
+- Al abrir el puerto el ESP32 se reinicia: `ESPERA_ARRANQUE` (6 s) debe ser mayor que `SILENCIO_REABRIR` (3 s), o se queda reabriendo en bucle.
+- `MODULO = "reles"` usa 25 y 33, los mismos de la altura: en ese modo no se crea la altura.
+- `encender_red.sh` filtra el texto de `anotar()` y la línea `"GET / `: cambiar esas frases rompe su monitor.
 - `ESPERA_SOLICITUD` es 35 s en el servidor y 30 s en la página, a propósito.
 - `solicitud.usuario` y `respuesta.usuario` traen el nombre para mostrar, no el usuario.
 - Los métodos de `Camilla` asumen `candado` tomado; SQLite, PBKDF2 y el puerto serie van fuera.
-- Los módulos de `publico/js` leen el DOM al cargarse: un `id` que se quite del HTML rompe el módulo que lo usa.

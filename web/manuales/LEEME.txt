@@ -1,0 +1,13 @@
+Manuales que se descargan desde el boton "Manuales" del panel.
+
+Poner aqui los PDF con estos nombres exactos:
+
+  manual-usuario.pdf   lo descarga cualquiera con sesion
+  manual-tecnico.pdf   solo un administrador
+
+Para cambiar un manual basta con reemplazar el archivo con el mismo nombre;
+no hay que reiniciar el servidor. Si falta uno, la pagina avisa
+"Ese manual todavia no esta disponible".
+
+Esta carpeta se sube al repositorio, que es publico: los PDF no deben
+llevar la clave del WiFi ni datos de pacientes.

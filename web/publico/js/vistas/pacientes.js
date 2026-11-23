@@ -3,7 +3,7 @@ import { ADMIN } from '../api/admin.js';
 import { mostrarAviso, revisar } from '../ui/avisos.js';
 import { marcarCampo } from '../ui/formularios.js';
 import { abrirModal, cerrarModal, confirmar } from '../ui/modales.js';
-import { esc, porId, sinTildes } from '../utilidades.js';
+import { bajarArchivo, esc, porId, sinTildes } from '../utilidades.js';
 
 /* Reglas iguales a web/basedatos.py, que es quien de verdad las aplica */
 const EDAD_MAXIMA = 120;
@@ -35,6 +35,7 @@ const campos = {};
 formulario.querySelectorAll('[data-campo]').forEach((c) => { campos[c.dataset.campo] = c; });
 
 let pacientes = [];
+let mostrados = [];    // los que se ven en la tabla (con la busqueda aplicada): los que baja el Excel
 let editando = null;   // id del registro que se esta editando (null = nuevo)
 let enFicha = null;    // paciente que muestra la ficha de solo lectura
 let panelFormulario = null;   // bootstrap.Offcanvas del formulario
@@ -191,11 +192,62 @@ function coincide(p, palabras) {
 function pintarPacientes() {
   const palabras = sinTildes(buscador.value.trim()).split(/\s+/).filter(Boolean);
   const filas = pacientes.filter((p) => coincide(p, palabras));
+  mostrados = filas;
   tabla.innerHTML = filas.map(filaPaciente).join('');
   porId('cuentaPacientes').textContent = pacientes.length;
+  porId('btnExcelPacientes').disabled = filas.length === 0;
   const vacio = porId('sinPacientes');
   vacio.textContent = pacientes.length ? 'Ningún paciente coincide con la búsqueda.' : 'Todavía no hay registros.';
   vacio.classList.toggle('d-none', filas.length > 0);
+}
+
+/* ---------- descargas ---------- */
+/* Excel con los registros que se ven en la tabla, en el mismo orden */
+function descargarExcel() {
+  const boton = porId('btnExcelPacientes');
+  const cuantos = mostrados.length;
+  if (!cuantos) return;
+  boton.disabled = true;
+  ADMIN.excelPacientes(mostrados.map((p) => p.id)).then((r) => {
+    if (!revisar(r)) return;
+    bajarArchivo(r.archivo, r.nombre);
+    const filtro = cuantos < pacientes.length ? ` de ${pacientes.length} (los de la búsqueda)` : '';
+    mostrarAviso(`Excel descargado: ${cuantos} ${cuantos === 1 ? 'registro' : 'registros'}${filtro}`, 'ok');
+  }, () => revisar(null)).finally(() => { boton.disabled = mostrados.length === 0; });
+}
+
+/* La ficha abierta en una hoja aparte y el dialogo de imprimir del navegador:
+   ahi se elige la impresora o "Guardar como PDF". El titulo de la pagina pasa a ser
+   el nombre que el navegador le propone al PDF */
+function imprimirFicha() {
+  const p = enFicha;
+  if (!p) return;
+  const hoja = porId('hojaImpresion');
+  const ahora = new Date();
+  const nombre = [p.nombres, p.apellidos].filter(Boolean).join(' ') || 'Sin nombre';
+  hoja.innerHTML =
+    '<div class="encabezado-hoja">' +
+      '<div class="small text-uppercase fw-semibold">Ficha de paciente · Camilla</div>' +
+      `<h1>${esc(nombre)}</h1>` +
+      `<div class="small">${esc(porId('fichaResumen').textContent)}</div>` +
+    '</div>' +
+    porId('fichaCuerpo').innerHTML +
+    `<div class="pie-hoja">Generado el ${formatoFecha(fechaLocal(ahora))} a las ` +
+      `${formatoHora(`${ahora.getHours()}:${ahora.getMinutes()}`)}. Contiene datos personales del paciente: guárdalo en un lugar seguro.</div>`;
+  const tituloAntes = document.title;
+  document.title = `Ficha ${nombreCompleto(p).replace(', ', ' ') || 'sin nombre'} ${fechaLocal(ahora)}`;
+  document.body.classList.add('imprimiendo');
+  window.addEventListener('afterprint', () => {
+    document.title = tituloAntes;
+    terminarImpresion();
+  }, { once: true });
+  window.print();
+}
+
+/* Que no queden datos del paciente en la hoja escondida */
+function terminarImpresion() {
+  document.body.classList.remove('imprimiendo');
+  porId('hojaImpresion').innerHTML = '';
 }
 
 /* ---------- ficha de solo lectura ---------- */
@@ -420,7 +472,9 @@ function guardarPaciente(e) {
 /* Al salir no quedan datos de pacientes en la pagina */
 export function olvidarPacientes() {
   pacientes = [];
+  mostrados = [];
   enFicha = null;
+  terminarImpresion();
   tabla.innerHTML = '';
   buscador.value = '';
   porId('listaFisios').innerHTML = '';
@@ -442,6 +496,9 @@ export function iniciarPacientes() {
   porId('btnNuevoPaciente').addEventListener('click', () => abrirFormulario(null));
   porId('btnFichaEditar').addEventListener('click', editarDesdeFicha);
   porId('btnFichaCerrar').addEventListener('click', cerrarModal);
+  porId('btnFichaPdf').addEventListener('click', imprimirFicha);
+  porId('modalFicha').addEventListener('hidden.bs.modal', terminarImpresion);   // por si el navegador no avisa "afterprint"
+  porId('btnExcelPacientes').addEventListener('click', descargarExcel);
   buscador.addEventListener('input', pintarPacientes);
   formulario.addEventListener('submit', guardarPaciente);
   campos.nacimiento.addEventListener('input', mostrarEdad);

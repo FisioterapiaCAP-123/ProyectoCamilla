@@ -4,9 +4,11 @@ import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.parse import urlsplit
 
 import basedatos
+import excel
 import hardware
 import paginas
 
@@ -18,6 +20,16 @@ HOMBRE_MUERTO = 1.0  # segundos sin "mover" para parar un motor continuo (la pag
 SESION_HORAS = 12  # una sesion que no se usa en este tiempo se borra
 LIMITES = {"cabeza": (-30, 70), "piernas": (0, 45)}  # grados: iguales a CONFIG en publico/js/config.js
 SECCIONES = ("altura", "cabeza", "piernas")
+
+# Manuales en PDF (web/manuales/). Se leen en cada descarga: para cambiar uno basta con reemplazar el archivo
+CARPETA_MANUALES = Path(__file__).parent / "manuales"
+MANUALES = {  # tipo -> (archivo, quien lo puede bajar)
+    "usuario": ("manual-usuario.pdf", ("fisio", "admin")),
+    "tecnico": ("manual-tecnico.pdf", ("admin",)),
+}
+
+LARGO_JSON = 4096  # bytes que se aceptan en una peticion
+LARGO_EXCEL = 64 * 1024  # la descarga de Excel manda la lista de registros que se ven (hasta ~9000)
 
 SILENCIO = ("/api/estado", "/api/mover", "/api/paso", "/vendor/", "/css/", "/js/")  # se piden muy seguido: no se anotan en el registro
 
@@ -374,7 +386,7 @@ class Manejador(BaseHTTPRequestHandler):
 
     def do_POST(self):
         ruta = urlsplit(self.path).path
-        datos = self.leer_json()
+        datos = self.leer_json(LARGO_EXCEL if ruta == "/api/pacientes/excel" else LARGO_JSON)
         if datos is None:
             return self.json(400, {"ok": False, "mensaje": "Peticion invalida."})
         if ruta == "/api/login":
@@ -396,6 +408,8 @@ class Manejador(BaseHTTPRequestHandler):
                 camilla.cerrar(token, "salio")
             elif ruta in ACCIONES:
                 ok, mensaje = ACCIONES[ruta](camilla, datos, sesion, token)
+            elif ruta == "/api/manual":
+                ok = None  # el archivo se lee fuera del candado
             elif not ruta.startswith(("/api/pacientes/", "/api/usuarios/")):
                 return self.responder(404, b"No encontrado", "text/plain")
             elif perfil["rol"] != "admin":
@@ -403,6 +417,10 @@ class Manejador(BaseHTTPRequestHandler):
             else:
                 ok = None
         if ok is None:
+            if ruta == "/api/manual":
+                return self.manual(datos, perfil)
+            if ruta == "/api/pacientes/excel":
+                return self.excel(datos, perfil)
             respuesta = administrar(ruta, datos, perfil)
             if respuesta is None:
                 return self.responder(404, b"No encontrado", "text/plain")
@@ -437,10 +455,39 @@ class Manejador(BaseHTTPRequestHandler):
         self.json(200, {"ok": True, "sesion": token, "usuario": perfil["usuario"], "nombre": perfil["nombre"],
                         "rol": perfil["rol"], "control": control})
 
-    def leer_json(self):
+    def excel(self, datos, admin):
+        """Los registros pedidos (los que se ven en la tabla, en ese orden) como archivo .xlsx."""
+        ids = datos.get("ids")
+        if not (isinstance(ids, list) and ids and all(es_id(i) for i in ids)):
+            return self.json(200, {"ok": False, "mensaje": "No hay registros para descargar."})
+        por_id = {p["id"]: p for p in basedatos.pacientes()}
+        elegidos = [por_id[i] for i in dict.fromkeys(ids) if i in por_id]
+        if not elegidos:
+            return self.json(200, {"ok": False, "mensaje": "Esos registros ya no existen."})
+        anotar(f"{admin['usuario']} descargo {len(elegidos)} registros de pacientes en Excel")
+        nombre = f"registros-{time.strftime('%Y-%m-%d')}.xlsx"
+        self.responder(200, excel.crear(elegidos), excel.TIPO,
+                       {"Content-Disposition": f'attachment; filename="{nombre}"', "Cache-Control": "no-store"})
+
+    def manual(self, datos, perfil):
+        """Manual en PDF. El de usuario lo baja cualquiera con sesion; el tecnico, solo un administrador."""
+        archivo, roles = MANUALES.get(str(datos.get("tipo")), (None, ()))
+        if archivo is None:
+            return self.json(200, {"ok": False, "mensaje": "Ese manual no existe."})
+        if perfil["rol"] not in roles:
+            return self.json(403, {"ok": False, "mensaje": "Solo un administrador puede bajar este manual."})
+        try:
+            contenido = (CARPETA_MANUALES / archivo).read_bytes()
+        except OSError:
+            return self.json(200, {"ok": False, "mensaje": "Ese manual todavía no está disponible."})
+        anotar(f"{perfil['usuario']} descargo el manual {datos['tipo']}")
+        self.responder(200, contenido, "application/pdf",
+                       {"Content-Disposition": f'attachment; filename="{archivo}"', "Cache-Control": "no-store"})
+
+    def leer_json(self, limite):
         try:
             largo = int(self.headers.get("Content-Length") or 0)
-            if largo > 4096:
+            if largo > limite:
                 return None
             datos = json.loads(self.rfile.read(largo) or b"{}")
         except ValueError:
@@ -455,12 +502,14 @@ class Manejador(BaseHTTPRequestHandler):
     def json(self, codigo, datos):
         self.responder(codigo, json.dumps(datos, ensure_ascii=False).encode(), "application/json; charset=utf-8")
 
-    def responder(self, codigo, cuerpo, tipo):
+    def responder(self, codigo, cuerpo, tipo, cabeceras=None):
         self.send_response(codigo)
         self.send_header("Content-Type", tipo)
         self.send_header("Content-Length", str(len(cuerpo)))
         if tipo.startswith("application/json"):
             self.send_header("Cache-Control", "no-store")
+        for nombre, valor in (cabeceras or {}).items():
+            self.send_header(nombre, valor)
         self.end_headers()
         self.wfile.write(cuerpo)
 

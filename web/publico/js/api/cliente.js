@@ -37,6 +37,22 @@ export function llamar(ruta, datos, ms) {
   }, ms || 5000);
 }
 
+export function descargar(ruta, datos, ms) {
+  const corte = new AbortController();
+  const plazo = setTimeout(() => corte.abort(), ms || 20000);
+  return fetch(API_BASE + ruta, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Sesion': sesion.token },
+    body: JSON.stringify(datos || {}),
+    signal: corte.signal
+  }).then((r) => {
+    if ((r.headers.get('Content-Type') || '').startsWith('application/json')) return r.json();
+    if (!r.ok) return null;
+    const nombre = /filename="([^"]+)"/.exec(r.headers.get('Content-Disposition') || '');
+    return r.blob().then((archivo) => ({ ok: true, archivo, nombre: nombre ? nombre[1] : 'descarga' }));
+  }).finally(() => clearTimeout(plazo));
+}
+
 /* Igual que llamar, pero deja constancia en el registro de comandos */
 export function enviar(ruta, datos) {
   registrar('→ ' + ruta + (datos ? ' ' + JSON.stringify(datos) : ''));

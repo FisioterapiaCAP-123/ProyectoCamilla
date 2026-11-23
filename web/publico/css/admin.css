@@ -33,6 +33,25 @@
 .texto-parrafos{white-space:pre-line}   /* diagnostico y notas respetan sus saltos de linea */
 @media (max-width:575.98px){
   .ficha-pie{padding-bottom:96px!important}   /* ficha a pantalla completa: el paro no tapa los botones */
-  .btn-nuevo-paciente{flex:1 1 100%;justify-content:center}
+  .btn-nuevo-paciente,.btn-excel-pacientes{flex:1 1 0;justify-content:center}
   .buscador-admin{max-width:none;flex:1 1 100%}
+}
+
+/* Ficha para imprimir / PDF: al imprimir con la clase "imprimiendo" solo sale la hoja */
+.hoja-impresion{display:none}
+@media print{
+  /* Margen 0: el navegador ya no tiene donde poner su encabezado y pie (fecha, titulo, localhost:8000).
+     El margen lo da la hoja, repetido en cada pagina si la ficha ocupa mas de una */
+  @page{size:letter;margin:0}
+  html,body.imprimiendo{overflow:visible!important;height:auto!important;padding:0!important;margin:0!important;background:#fff!important}
+  body.imprimiendo>*:not(.hoja-impresion){display:none!important}
+  body.imprimiendo .hoja-impresion{display:block;color:#000;font-size:11pt;padding:15mm 18mm;
+    -webkit-box-decoration-break:clone;box-decoration-break:clone}
+  .hoja-impresion .encabezado-hoja{border-bottom:2px solid #000;padding-bottom:.5rem;margin-bottom:1rem}
+  .hoja-impresion h1{font-family:var(--titulo);font-size:20pt;font-weight:600;margin:0}
+  .hoja-impresion .subtitulo-panel{break-after:avoid;color:#444!important}
+  .hoja-impresion dl>div{break-inside:avoid}
+  .hoja-impresion dt{color:#555!important}
+  .hoja-impresion .badge{print-color-adjust:exact;-webkit-print-color-adjust:exact}
+  .hoja-impresion .pie-hoja{border-top:1px solid #999;margin-top:1.5rem;padding-top:.4rem;font-size:9pt;color:#555}
 }
