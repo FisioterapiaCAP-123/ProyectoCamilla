@@ -20,8 +20,15 @@ TIEMPO_LIBERAR = 10  # segundos sin noticias de quien tiene el control para libe
 ESPERA_SOLICITUD = 35  # segundos que dura un pedido de control sin respuesta (las paginas cuentan 30)
 HOMBRE_MUERTO = 1.0  # segundos sin "mover" para parar un motor continuo (la pagina lo repite mientras se mantiene el boton)
 SESION_HORAS = 12  # una sesion que no se usa en este tiempo se borra
-IP_RECORDADA = 60 * 60  # el reparto de IP de la red Camilla dura 60 min: antes nadie mas puede tener esa IP
-PRUEBAS_INTERNET = ("/generate_204", "/gen_204")  # rutas con que Android pregunta si hay internet
+IP_CON_SESION = 60 * 60  # el reparto de IP de la red Camilla dura 60 min: antes nadie mas puede tener esa IP
+# Como preguntan los celulares si hay internet, y la respuesta que significa "si"
+EXITO_APPLE = b"<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>"
+PRUEBAS_INTERNET = {
+    "/generate_204": (204, b""),                     # Android
+    "/gen_204": (204, b""),                          # Android
+    "/hotspot-detect.html": (200, EXITO_APPLE),      # iPhone, iPad y Mac
+    "/library/test/success.html": (200, EXITO_APPLE),
+}
 LIMITES = {"cabeza": (-30, 70), "piernas": (0, 45)}  # grados: iguales a CONFIG en publico/js/config.js
 SECCIONES = ("altura", "cabeza", "piernas")
 
@@ -120,10 +127,10 @@ class Camilla:
             sesion["ip"] = ip
         return sesion
 
-    def es_equipo_recordado(self, ip):
-        """Esa IP es de un equipo recordado (la tablet de control) que se uso hace poco."""
+    def tiene_sesion(self, ip):
+        """Desde esa IP hay una sesion abierta que se uso hace poco."""
         t = time.monotonic()
-        return any(s["llave"] and s["ip"] == ip and t - s["visto"] < IP_RECORDADA for s in self.sesiones.values())
+        return any(s["ip"] == ip and t - s["visto"] < IP_CON_SESION for s in self.sesiones.values())
 
     def cerrar(self, token, motivo):
         usuario = self.sesiones[token]["usuario"]
@@ -423,17 +430,18 @@ class Manejador(BaseHTTPRequestHandler):
         # Portal tipo "WiFi de hotel": en la red Camilla los celulares preguntan a
         # sitios como captive.apple.com si hay internet. Se les redirige a la pagina
         # y el celular la abre solo.
-        # Excepcion: a la tablet de control se le dice que si hay internet (204). Si no, Android
-        # muestra "sin internet" todo el tiempo. Solo a ella: un celular que lo creyera dejaria
-        # de usar sus datos moviles mientras esta en la red Camilla.
+        # Ya con sesion iniciada se le dice que si hay internet: asi se queda en la red Camilla y
+        # no salta a otra red guardada o a sus datos. Mientras tanto ese equipo no tiene internet
+        # (todo lo manda por aqui); al cerrar sesion o tras 60 min sin usarla vuelve a ser portal.
         host = (self.headers.get("Host") or "").split(":")[0]
         ruta = urlsplit(self.path).path
         if self.connection.getsockname()[0] == IP_RED and host != IP_RED:
             if ruta in PRUEBAS_INTERNET:
                 with candado:
-                    recordado = camilla.es_equipo_recordado(self.client_address[0])
-                if recordado:
-                    return self.responder(204, b"", "text/plain")
+                    con_sesion = camilla.tiene_sesion(self.client_address[0])
+                if con_sesion:
+                    codigo, cuerpo = PRUEBAS_INTERNET[ruta]
+                    return self.responder(codigo, cuerpo, "text/html")
             self.send_response(302)
             self.send_header("Location", f"http://{IP_RED}:{PUERTO_WEB}/")
             self.send_header("Content-Length", "0")
