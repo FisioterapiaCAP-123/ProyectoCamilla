@@ -11,6 +11,7 @@ import { iniciarAcceso } from './vistas/acceso.js';
 import { iniciarCesion } from './vistas/cesion.js';
 import { iniciarManuales } from './vistas/manuales.js';
 import { iniciarPacientes } from './vistas/pacientes.js';
+import { iniciarPantalla } from './vistas/pantalla.js';
 import { iniciarPestanas } from './vistas/pestanas.js';
 import { entrarAlPanel, iniciarSalida } from './vistas/sesion.js';
 import { iniciarUsuarios } from './vistas/usuarios.js';
@@ -25,6 +26,7 @@ iniciarPestanas();
 iniciarPacientes();
 iniciarUsuarios();
 iniciarManuales();
+iniciarPantalla();
 exponerApi();
 
 porId('btnReintentar').addEventListener('click', () => {
