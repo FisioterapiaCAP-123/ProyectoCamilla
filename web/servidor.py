@@ -20,6 +20,8 @@ TIEMPO_LIBERAR = 10  # segundos sin noticias de quien tiene el control para libe
 ESPERA_SOLICITUD = 35  # segundos que dura un pedido de control sin respuesta (las paginas cuentan 30)
 HOMBRE_MUERTO = 1.0  # segundos sin "mover" para parar un motor continuo (la pagina lo repite mientras se mantiene el boton)
 SESION_HORAS = 12  # una sesion que no se usa en este tiempo se borra
+IP_RECORDADA = 60 * 60  # el reparto de IP de la red Camilla dura 60 min: antes nadie mas puede tener esa IP
+PRUEBAS_INTERNET = ("/generate_204", "/gen_204")  # rutas con que Android pregunta si hay internet
 LIMITES = {"cabeza": (-30, 70), "piernas": (0, 45)}  # grados: iguales a CONFIG en publico/js/config.js
 SECCIONES = ("altura", "cabeza", "piernas")
 
@@ -75,7 +77,7 @@ class Camilla:
     """Estado compartido por todas las paginas. Cada metodo se llama con `candado` tomado."""
 
     def __init__(self):
-        self.sesiones = {}  # token -> {"id", "usuario", "nombre", "rol", "visto", "llave"}: el perfil de cada pagina
+        self.sesiones = {}  # token -> {"id", "usuario", "nombre", "rol", "visto", "llave", "ip"}: el perfil de cada pagina
         # token -> (aviso, momento) de las sesiones que cerro otro: la pagina sabe por que salio
         # y un equipo recordado no vuelve a entrar solo (dos pestanas se sacarian entre si sin parar)
         self.cerradas = {}
@@ -104,18 +106,24 @@ class Camilla:
         token = secrets.token_urlsafe(24)
         ahora = time.monotonic()
         self.sesiones[token] = {"id": perfil["id"], "usuario": perfil["usuario"], "nombre": perfil["nombre"],
-                                "rol": perfil["rol"], "visto": ahora, "llave": huella_llave,
+                                "rol": perfil["rol"], "visto": ahora, "llave": huella_llave, "ip": None,
                                 "con_clave": con_clave, "pin": pin,
                                 "abierto_hasta": ahora + REGISTROS_ABIERTO if con_clave else 0.0}
         anotar(f"{perfil['usuario']} inicio sesion")
         return token
 
-    def sesion_de(self, token):
-        """La sesion (perfil) de ese token, o None. De paso anota que esa pagina sigue viva."""
+    def sesion_de(self, token, ip=None):
+        """La sesion (perfil) de ese token, o None. De paso anota que esa pagina sigue viva y desde que IP."""
         sesion = self.sesiones.get(token) if token else None
         if sesion is not None:
             sesion["visto"] = time.monotonic()
+            sesion["ip"] = ip
         return sesion
+
+    def es_equipo_recordado(self, ip):
+        """Esa IP es de un equipo recordado (la tablet de control) que se uso hace poco."""
+        t = time.monotonic()
+        return any(s["llave"] and s["ip"] == ip and t - s["visto"] < IP_RECORDADA for s in self.sesiones.values())
 
     def cerrar(self, token, motivo):
         usuario = self.sesiones[token]["usuario"]
@@ -415,19 +423,27 @@ class Manejador(BaseHTTPRequestHandler):
         # Portal tipo "WiFi de hotel": en la red Camilla los celulares preguntan a
         # sitios como captive.apple.com si hay internet. Se les redirige a la pagina
         # y el celular la abre solo.
+        # Excepcion: a la tablet de control se le dice que si hay internet (204). Si no, Android
+        # muestra "sin internet" todo el tiempo. Solo a ella: un celular que lo creyera dejaria
+        # de usar sus datos moviles mientras esta en la red Camilla.
         host = (self.headers.get("Host") or "").split(":")[0]
+        ruta = urlsplit(self.path).path
         if self.connection.getsockname()[0] == IP_RED and host != IP_RED:
+            if ruta in PRUEBAS_INTERNET:
+                with candado:
+                    recordado = camilla.es_equipo_recordado(self.client_address[0])
+                if recordado:
+                    return self.responder(204, b"", "text/plain")
             self.send_response(302)
             self.send_header("Location", f"http://{IP_RED}:{PUERTO_WEB}/")
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
 
-        ruta = urlsplit(self.path).path
         if ruta == "/api/estado":
             token = self.headers.get("X-Sesion", "")
             with candado:
-                datos = camilla.estado(camilla.sesion_de(token), token)
+                datos = camilla.estado(camilla.sesion_de(token, self.client_address[0]), token)
             self.json(200, datos)
         elif ruta == "/":
             self.responder(200, *paginas.pagina())
@@ -451,7 +467,7 @@ class Manejador(BaseHTTPRequestHandler):
         token = self.headers.get("X-Sesion", "")
         llave_salida = None
         with candado:
-            sesion = camilla.sesion_de(token)
+            sesion = camilla.sesion_de(token, self.client_address[0])
             perfil = dict(sesion) if sesion else None  # copia: la base de datos se usa sin el candado
             if ruta == "/api/paro":  # el paro lo puede mandar cualquiera, aunque no haya iniciado sesion
                 ok, mensaje = camilla.cambiar_paro(datos.get("activo") is True,

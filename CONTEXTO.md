@@ -197,6 +197,7 @@ ESP32 -> Raspberry   E altura=detenido cabeza=extendiendo piernas=contrayendo*XX
 - **Ficha en PDF:** no pasa por el servidor. El botón "Descargar" de la ficha copia la ficha a `#hojaImpresion` y llama a `window.print()`. Con `body.imprimiendo`, la regla `@media print` de `admin.css` deja solo esa hoja. Al terminar (`afterprint`, o al cerrar la ficha) se vacía.
 - JSON de más de 4096 bytes (64 KB en `/api/pacientes/excel`) o que no sea un objeto: 400. Sin sesión: 401. Sin rol de administrador: 403.
 - **Portal cautivo:** una petición que llega a 10.42.0.1 con otro `Host` (por ejemplo `captive.apple.com`) recibe un 302 a `http://10.42.0.1:8000/`, y el celular abre la página solo.
+  - Excepción: la prueba de internet de Android (`/generate_204`, `/gen_204`) recibe un 204 si viene de la IP de un equipo recordado usado en los últimos 60 min (`es_equipo_recordado`). Así la tablet no muestra "sin internet". Solo a ella: un celular que creyera tener internet dejaría de usar sus datos móviles. La tablet Huawei (Android 7) ignora `captive_portal_mode` por `adb`.
 - **Login:** PBKDF2 fuera del candado; con contraseña incorrecta espera 1 s. Perfil desactivado: no entra.
 - **Registro del sistema:** `anotar()` escribe a stderr con la hora (`journalctl -t python3` con el arranque automático). No anota las rutas de `SILENCIO` ni datos de pacientes, solo su número. `encender_red.sh` filtra estas frases: `inicio sesion`, `cerro sesion`, `creo su perfil`, `control: `, `el control a `, `PARO` y `contrasena incorrecta`.
 
