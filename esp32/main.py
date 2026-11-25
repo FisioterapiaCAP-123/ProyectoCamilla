@@ -9,6 +9,11 @@ modulo de 4 reles.
 Altura (DRV8825): GPIO 25 -> STP, GPIO 33 -> DIR, GPIO 13 -> EN, RST+SLP a 3.3 V,
 GND comun. La conexion completa esta al inicio de prueba_stepper.py.
 
+Finales de carrera de piernas: contacto NC del microswitch entre el GPIO y GND
+(C y NC; sin resistencia, se usa la interna). GPIO 17 = arriba (al extender),
+GPIO 16 = abajo (al retraer). Con un final tocado no se mueve hacia ese lado, si
+se puede hacia el otro. Un cable cortado se lee como tocado: tambien para.
+
 Ordenes que recibe, una por linea, terminadas en *XX (comprobacion en hexadecimal):
     M piernas 1    mover la seccion: 1 extiende, -1 retrae. Se debe repetir cada 200 ms
     S piernas      detener esa seccion
@@ -16,10 +21,12 @@ Ordenes que recibe, una por linea, terminadas en *XX (comprobacion en hexadecima
     P              la Raspberry sigue conectada
 
 A cada orden valida responde con el estado de todas las secciones:
-    E cabeza=detenido piernas=detenido*XX
+    E cabeza=detenido piernas=detenido final_piernas=no*XX
+    final_piernas: no, arriba, abajo o falla (los dos tocados: revisar cables)
 
 Seguridad:
     - Una seccion se detiene sola si pasan LIMITE_SIN_ORDEN_MS sin recibir su M.
+    - Piernas se detiene al tocar su final de carrera (PIERNAS_FINAL_ARRIBA/ABAJO).
     - Con la primera orden de la Raspberry se activa el watchdog: si el programa
       se cuelga, la placa se reinicia y los reles quedan apagados.
 """
@@ -35,6 +42,10 @@ MODULO = "puente"           # "puente": piernas (BTS7960) y cabeza (L298N) | "re
 PIN_EXTENDER = 26           # piernas, BTS7960: RPWM
 PIN_RETRAER = 27            # piernas, BTS7960: LPWM
 PIN_HABILITAR = None        # piernas, BTS7960: R_EN+L_EN; None si van a 3.3 V
+PIERNAS_FINAL_ARRIBA = 17   # piernas: final de carrera al extender (subir); None si no esta conectado
+PIERNAS_FINAL_ABAJO = 16    # piernas: final de carrera al retraer (bajar); None si no esta conectado
+FINAL_ACTIVO = 1            # lo que lee el pin con el final TOCADO: 1 = contacto NC a GND (si se corta
+                            #   el cable tambien para); 0 = contacto NO a GND
 CABEZA_EXTENDER = 18        # cabeza, L298N: IN1 (ENA con su jumper)
 CABEZA_RETRAER = 19         # cabeza, L298N: IN2
 VELOCIDAD = 100             # puente H: potencia en % (0 a 100)
@@ -59,6 +70,7 @@ LARGO_MAXIMO = 64           # una linea mas larga se descarta
 APAGADO = 1 if ACTIVO_BAJO else 0
 NOMBRE_ESTADO = {None: "detenido", "a": "extendiendo", "b": "contrayendo"}
 DIRECCIONES = {"1": "a", "-1": "b"}
+NOMBRE_FINAL = {"": "no", "a": "arriba", "b": "abajo", "ab": "falla"}   # "ab": los dos a la vez = cable suelto
 
 led = Pin(2, Pin.OUT, value=0)
 perro = None
@@ -162,15 +174,31 @@ class PuenteH:
         (self.a if cual == "a" else self.b).duty_u16(potencia)
 
 
-class Seccion:
-    """Actuadores que se mueven juntos, en la misma direccion (pares de reles o puentes H)."""
+def entrada_final(numero):
+    """Final de carrera entre el GPIO y GND, con la resistencia interna. None si no hay."""
+    return None if numero is None else Pin(numero, Pin.IN, Pin.PULL_UP)
 
-    def __init__(self, pares):
+
+class Seccion:
+    """Actuadores que se mueven juntos, en la misma direccion (pares de reles o puentes H).
+    finales: {"a": pin, "b": pin}, el final de carrera de cada direccion ("a" extiende o sube).
+    Con su final tocado, la seccion no arranca hacia ese lado y, si iba, se detiene."""
+
+    def __init__(self, pares, finales=None):
         self.pares = pares
+        self.finales = {cual: pin for cual, pin in (finales or {}).items() if pin is not None}
         self.marcha = None      # direccion en la que estan encendidos los reles
         self.pedido = None      # direccion que pide la Raspberry
         self.visto = 0          # cuando llego la ultima orden de mover
         self.libre_desde = None  # antes de este momento no se puede arrancar
+
+    def en_final(self, cual):
+        pin = self.finales.get(cual)
+        return pin is not None and pin.value() == FINAL_ACTIVO
+
+    def topes(self):
+        """Los finales tocados, para la linea E: "a", "b", "ab" o ""."""
+        return "".join(cual for cual in "ab" if self.en_final(cual))
 
     def apagar_reles(self):
         for par in self.pares:
@@ -197,6 +225,12 @@ class Seccion:
         if time.ticks_diff(ahora, self.visto) > LIMITE_SIN_ORDEN_MS:
             self.detener()
             return
+        if self.en_final(self.pedido):
+            # Llego al final (o ya estaba): se apaga y no arranca hacia ese lado. El pedido
+            # sigue: si fue ruido y el final se suelta, arranca otra vez tras la pausa
+            if self.marcha is not None:
+                self.apagar_reles()
+            return
         if self.marcha is None and self.libre_desde is None:
             for par in self.pares:      # arrancan juntos
                 par.encender(self.pedido)
@@ -216,7 +250,8 @@ if MODULO == "reles":
     }
 else:
     SECCIONES = {
-        "piernas": Seccion([PuenteH(PIN_EXTENDER, PIN_RETRAER, PIN_HABILITAR)]),
+        "piernas": Seccion([PuenteH(PIN_EXTENDER, PIN_RETRAER, PIN_HABILITAR)],
+                           {"a": entrada_final(PIERNAS_FINAL_ARRIBA), "b": entrada_final(PIERNAS_FINAL_ABAJO)}),
         "cabeza": Seccion([PuenteH(CABEZA_EXTENDER, CABEZA_RETRAER)]),
     }
     if ALTURA_STEPPER:
@@ -241,6 +276,8 @@ def comprobacion(texto):
 
 def responder():
     partes = ["%s=%s" % (nombre, NOMBRE_ESTADO[SECCIONES[nombre].marcha]) for nombre in sorted(SECCIONES)]
+    partes += ["final_%s=%s" % (nombre, NOMBRE_FINAL[SECCIONES[nombre].topes()])
+               for nombre in sorted(SECCIONES) if SECCIONES[nombre].finales]
     texto = "E " + " ".join(partes)
     print(texto + "*" + comprobacion(texto))
 
@@ -301,6 +338,9 @@ def bucle():
 
 def arrancar():
     detener_todo()
+    for nombre in sorted(SECCIONES):
+        if SECCIONES[nombre].finales:
+            print("# finales de %s: %s" % (nombre, NOMBRE_FINAL[SECCIONES[nombre].topes()]))
     print("# camilla lista")
     try:
         bucle()

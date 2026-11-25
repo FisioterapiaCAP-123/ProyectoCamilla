@@ -81,6 +81,8 @@ compi.txt     (sin seguimiento en git) código del compañero. TIENE LA CLAVE DE
 | `MODULO` | `"puente"` | `"puente"`: piernas, cabeza y altura. `"reles"`: solo cabeza con el módulo de 4 relés (no crea la altura). |
 | `PIN_EXTENDER`, `PIN_RETRAER` | 26, 27 | Piernas: RPWM y LPWM del BTS7960 |
 | `PIN_HABILITAR` | `None` | R_EN y L_EN van a 3.3 V. Con un GPIO, se apaga al parar. |
+| `PIERNAS_FINAL_ARRIBA`, `PIERNAS_FINAL_ABAJO` | 17, 16 | Finales de carrera de piernas (al extender y al retraer), contacto NC a GND con la resistencia interna. `None` si no están conectados: sin conectar se leen como tocados y piernas no se mueve. El código del compañero (`compi.txt`, no se sube) usaba 32 y 33, pero 33 es DIR de la altura. |
+| `FINAL_ACTIVO` | 1 | Lo que lee el pin con el final tocado: 1 = NC (cable cortado también para), 0 = NO |
 | `CABEZA_EXTENDER`, `CABEZA_RETRAER` | 18, 19 | Cabeza: IN1 e IN2 del L298N (ENA con su jumper) |
 | `VELOCIDAD`, `FRECUENCIA_PWM` | 100 %, 1000 Hz | Puentes H: siempre a toda potencia |
 | `ALTURA_STEPPER` | `True` | Crea la sección `altura` |
@@ -111,7 +113,7 @@ Raspberry -> ESP32   M <seccion> 1    extender o subir; se repite cada 200 ms
                      S <seccion>      detener esa sección (el servidor no la usa)
                      X                detener todo
                      P                sigo aquí (cuando no hay movimiento)
-ESP32 -> Raspberry   E altura=detenido cabeza=extendiendo piernas=contrayendo*XX
+ESP32 -> Raspberry   E altura=detenido cabeza=extendiendo piernas=contrayendo final_piernas=no*XX
                      # camilla lista | # altura desactivada: ... | # error: ...
 ```
 
@@ -119,7 +121,9 @@ ESP32 -> Raspberry   E altura=detenido cabeza=extendiendo piernas=contrayendo*XX
 - El LED azul (GPIO 2) está encendido mientras alguna sección está en marcha.
 - Ctrl+C (Thonny) detiene todo y, si el watchdog ya estaba activo, reinicia la placa para que Thonny pueda entrar. Cualquier otro error detiene todo, imprime `# error: ...` y reinicia.
 
-**No hace:** leer finales de carrera, contar pasos de la altura, medir corriente, limitar el tiempo de marcha ni informar posición. Los estados de la línea `E` llegan al servidor, pero el servidor solo usa los nombres de las secciones.
+**Finales de carrera de piernas:** con el final de una dirección tocado, `Seccion.atender` apaga el puente H y no arranca hacia ese lado; hacia el otro sí. El pedido sigue: si fue ruido, arranca otra vez tras la pausa. La línea `E` agrega `final_piernas=no|arriba|abajo|falla` (falla = los dos a la vez, cable suelto) y al arrancar imprime `# finales de piernas: ...`. El servidor ignora ese dato por ahora (la página no lo muestra).
+
+**No hace:** leer finales de carrera de la altura ni de la cabeza, contar pasos de la altura, medir corriente, limitar el tiempo de marcha ni informar posición. Los estados de la línea `E` llegan al servidor, pero el servidor solo usa los nombres de las secciones.
 
 **`esp32/prueba_stepper.py`:** prueba del motor de la altura desde la consola de Thonny (F5; no se guarda como `main.py`). Órdenes `s`, `b`, `s 400`, `b 400`, `p`, `v 600`, `0` y `?`. Genera los pulsos a mano (no con PWM), con rampa y frenado, a 400 pasos/s por omisión, y para solo a los 15 s. Ya lee los finales de carrera con `USAR_FINALES = True`: normalmente abiertos a GND, GPIO 4 (abajo, con la resistencia interna) y GPIO 35 (arriba, con 10 kΩ a 3.3 V porque no tiene interna). Su docstring tiene la conexión completa del DRV8825.
 
