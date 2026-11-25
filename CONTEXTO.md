@@ -1,6 +1,6 @@
 # Contexto del proyecto
 
-**Actualizado el 20-11-2026.** Rama `desarrollo-final`, creada ese día desde `master` (`1eaf7a2`, del 16-11) para terminar el desarrollo. El software se revisó contra el código de esta rama, archivo por archivo. Lo que no se puede comprobar desde el PC (hardware, Raspberry) viene de las notas anteriores, con la fecha en que se probó, o se marca "sin confirmar".
+**Actualizado el 24-11-2026.** Rama `desarrollo-final`, creada el 20-11 desde `master` (`1eaf7a2`, del 16-11) para terminar el desarrollo. El 24-11 se revisó otra vez contra el código de esta rama, archivo por archivo (tablet de control, portal, finales de piernas, altura sin finales y sin `prueba_stepper.py`). Lo que no se puede comprobar desde el PC (hardware, Raspberry) viene de las notas anteriores, con la fecha en que se probó, o se marca "sin confirmar".
 
 - La versión anterior de este archivo, con la historia del 09-11 al 16-11, el análisis completo de sensores de ángulo y el diseño del encoder, se ve con `git show 1eaf7a2:CONTEXTO.md`.
 - **Otras ramas: no se usan como referencia**, salvo que el usuario lo pida. `manuales` (manuales de la tesis y un diseño con AS5600 sin montar), `muestra-citein` (interfaz sin grados de la presentación del 13-11), `backup-cambios-esp32` (encoder; tiene `codigoesp32.txt` con la clave del WiFi), `esp32-conexion` y `optimizaciones-esp32` (viejas).
@@ -11,14 +11,15 @@
 | Parte | Estado |
 |---|---|
 | Control desde el celular | Funciona. El 13-11 las tres secciones se movieron desde la página con la placa real. |
-| Piernas | 2 actuadores 1500N en paralelo en un BTS7960 (GPIO 26 y 27). Probado en la placa real el 11-11. |
-| Cabeza | 1 actuador 3000N (de 2) en un L298N (GPIO 18 y 19). Probado en la placa real. Faltan su BTS7960 y el segundo actuador. |
-| Altura | NEMA 17 con DRV8825 (GPIO 25, 33 y 13). Probado sin carga el 13-11. Sin finales de carrera en `main.py`. Husillo sin definir. |
-| Ángulos y altura en pantalla | Estimados: no hay sensores. Cada página calcula su propia estimación y las demás pantallas no la ven. |
+| Piernas | 2 actuadores 1500N en paralelo en un BTS7960 (GPIO 26 y 27). Probado en la placa real el 11-11. Finales de carrera NC en GPIO 17 (arriba) y 16 (abajo), en `main.py` desde el 24-11; sin probar en la placa. |
+| Cabeza | 1 actuador 3000N (de 2) en un L298N (GPIO 18 y 19). Probado en la placa real. Faltan su BTS7960 y el segundo actuador. Finales previstos en GPIO 23 y 32, sin código. |
+| Altura | NEMA 17 con DRV8825 (GPIO 25, 33 y 13). Probado sin carga el 13-11 y desde la página el 24-11. **Sin finales de carrera** (decisión del 24-11): se mueve solo mientras se mantiene el botón. Husillo sin definir. |
+| Ángulos y altura en pantalla | Estimados: no hay sensores. Cada página calcula su propia estimación y las demás pantallas no la ven. El sensor de piernas está sin decidir (sección 8). |
+| Tablet de control | Funciona (23 y 24-11, Huawei con Android 7): "Recordar este equipo", PIN de Registros, pantalla completa, app fijada y sin aviso de "sin internet". |
 | "Ir a" y "Plano 0°" | Solo mueven el número y el dibujo. No mueven motores. |
 | Seguridad del movimiento | Hombre muerto en la página, el servidor y el ESP32; watchdog; órdenes numeradas; paro lógico. **No hay paro físico.** |
 | Perfiles, roles y pacientes | Completo, en SQLite. Registro de perfiles abierto. Sin bitácora de uso. |
-| Red Camilla y arranque automático | Instalados y funcionando en la Raspberry desde el 12-11. |
+| Red Camilla y arranque automático | Instalados y funcionando en la Raspberry desde el 12-11. Portal: sin sesión la página se abre sola; con sesión el equipo se queda en la red (probado con la tablet el 24-11). |
 | Tiempo real | Sin WebSocket: la página consulta cada 1 s. |
 
 ## 2. Arquitectura
@@ -61,7 +62,7 @@ ESP32 WROOM-32 con esp32/main.py (MicroPython v1.29.0)
 **Estructura:**
 
 ```text
-esp32/        main.py (firmware), prueba_stepper.py (prueba del stepper en Thonny)
+esp32/        main.py (firmware: lo único que se carga en la placa)
 red/          instalar_red.sh, encender_red.sh, instalar_arranque.sh, arranque_red.sh
 web/          servidor.py, hardware.py, basedatos.py, paginas.py, datos_prueba.py
   plantillas/ index.html y parciales: login.html, paro-flotante.html, panel/ (control/, registros, usuarios), modales/
@@ -101,9 +102,9 @@ compi.txt     (sin seguimiento en git) código del compañero. TIENE LA CLAVE DE
 - `PuenteH(pin_a, pin_b, pin_habilitar=None)`: un canal de L298N o un BTS7960. `"a"` extiende y `"b"` retrae; nunca los dos a la vez. Las salidas se crean en 0 (`salida_pwm`), porque algunas versiones arrancan el PWM a medias.
 - `Stepper(step, dir, en)`: el PWM en STEP da un pulso por paso y su frecuencia es la velocidad. `"a"` sube. `actualizar()` hace la rampa y solo cambia la frecuencia cada 10 pasos/s. `poner_velocidad` suma 1 si la frecuencia sería 1000 Hz, para no compartir reloj con los puentes H.
 - `ParReles(pin_a, pin_b)`: dos relés por actuador, del código del compañero. Solo con `MODULO = "reles"` (26/27 y 25/33).
-- `Seccion(pares)`: los actuadores de una sección arrancan, paran e invierten juntos. Lleva `marcha` (lo que está encendido), `pedido` (lo que pide la Raspberry), `visto` (último `M`) y `libre_desde` (fin de la pausa).
+- `Seccion(pares, finales=None)`: los actuadores de una sección arrancan, paran e invierten juntos. Lleva `marcha` (lo que está encendido), `pedido` (lo que pide la Raspberry), `visto` (último `M`) y `libre_desde` (fin de la pausa). `finales` es `{"a": pin, "b": pin}` (creados con `entrada_final`, pull-up interno); `en_final(cual)` y `topes()` los leen.
 
-**Secciones creadas hoy:** `piernas` = `PuenteH(26, 27)`, `cabeza` = `PuenteH(18, 19)` y `altura` = `Stepper(25, 33, 13)`. Si el stepper falla al crearse, imprime `# altura desactivada: ...` y las otras dos siguen. Para agregar una sección se edita `SECCIONES`: el servidor la detecta sola por las líneas `E`.
+**Secciones creadas hoy:** `piernas` = `PuenteH(26, 27)` con finales 17 y 16, `cabeza` = `PuenteH(18, 19)` y `altura` = `Stepper(25, 33, 13)`. Si el stepper falla al crearse, imprime `# altura desactivada: ...` y las otras dos siguen. Para agregar una sección se edita `SECCIONES`: el servidor la detecta sola por las líneas `E`.
 
 **Protocolo por USB.** Una orden por línea, terminada en `*XX` (XOR de los caracteres, en hexadecimal):
 
@@ -114,7 +115,7 @@ Raspberry -> ESP32   M <seccion> 1    extender o subir; se repite cada 200 ms
                      X                detener todo
                      P                sigo aquí (cuando no hay movimiento)
 ESP32 -> Raspberry   E altura=detenido cabeza=extendiendo piernas=contrayendo final_piernas=no*XX
-                     # camilla lista | # altura desactivada: ... | # error: ...
+                     # finales de piernas: no | # camilla lista | # altura desactivada: ... | # error: ...
 ```
 
 - Responde `E` a toda línea con comprobación correcta, aunque la orden no sea válida. Las líneas con comprobación mala se ignoran (si era un `M`, la sección para sola a los 500 ms).
@@ -123,9 +124,9 @@ ESP32 -> Raspberry   E altura=detenido cabeza=extendiendo piernas=contrayendo fi
 
 **Finales de carrera de piernas:** con el final de una dirección tocado, `Seccion.atender` apaga el puente H y no arranca hacia ese lado; hacia el otro sí. El pedido sigue: si fue ruido, arranca otra vez tras la pausa. La línea `E` agrega `final_piernas=no|arriba|abajo|falla` (falla = los dos a la vez, cable suelto) y al arrancar imprime `# finales de piernas: ...`. El servidor ignora ese dato por ahora (la página no lo muestra).
 
-**No hace:** leer finales de carrera de la altura ni de la cabeza, contar pasos de la altura, medir corriente, limitar el tiempo de marcha ni informar posición. Los estados de la línea `E` llegan al servidor, pero el servidor solo usa los nombres de las secciones.
+**No hace:** leer finales de la cabeza (previstos en 23 y 32), contar pasos de la altura, medir corriente, limitar el tiempo de marcha ni informar posición. La altura no lleva finales de carrera (decisión del 24-11). Los estados y `final_piernas` de la línea `E` llegan al servidor, pero el servidor solo usa los nombres de las secciones.
 
-**`esp32/prueba_stepper.py`:** prueba del motor de la altura desde la consola de Thonny (F5; no se guarda como `main.py`). Órdenes `s`, `b`, `s 400`, `b 400`, `p`, `v 600`, `0` y `?`. Genera los pulsos a mano (no con PWM), con rampa y frenado, a 400 pasos/s por omisión, y para solo a los 15 s. Ya lee los finales de carrera con `USAR_FINALES = True`: normalmente abiertos a GND, GPIO 4 (abajo, con la resistencia interna) y GPIO 35 (arriba, con 10 kΩ a 3.3 V porque no tiene interna). Su docstring tiene la conexión completa del DRV8825.
+**Solo `main.py`:** `prueba_stepper.py` (prueba del stepper desde Thonny, con finales opcionales en GPIO 4 y 35) se borró el 24-11; sigue en git (`git show e1f6a15:esp32/prueba_stepper.py`). La conexión completa del DRV8825 quedó en el encabezado de `main.py`. Todo se prueba desde la página.
 
 ## 4. Servidor
 
@@ -150,6 +151,7 @@ ESP32 -> Raspberry   E altura=detenido cabeza=extendiendo piernas=contrayendo fi
 | `ESPERA_SOLICITUD` | 35 s | Vida de un pedido de control (la página cuenta 30) |
 | `HOMBRE_MUERTO` | 1.0 s | Sin `/api/mover`, se para el motor |
 | `SESION_HORAS` | 12 h | Una sesión sin uso se borra |
+| `IP_CON_SESION` | 60 min | Portal: una IP con sesión usada en este tiempo recibe "sí hay internet" (dura lo mismo que el reparto de IP) |
 | `LIMITES` | cabeza −30 a 70, piernas 0 a 45 | Solo los usa `/api/paso` |
 
 **Estado (`Camilla`, en memoria):** `sesiones` (token → perfil), `titular`, `solicitud`, `respuestas`, `paro`, `angulos` (siempre 0: nadie usa `/api/paso`), `motor` (una sección a la vez) y `hardware`. Reiniciar el servidor borra todo esto: saca a todos y libera el paro.
@@ -230,6 +232,7 @@ Sin compilación: el servidor junta las plantillas y el navegador carga módulos
 | `config.js` | `CONFIG` de cada sección, `RITMO` y tiempos |
 | `estado.js` | Estado compartido (`panel`, `control`, `sesion`) y `puedeMover()` |
 | `recepcion.js` | Aplica cada respuesta de `/api/estado` |
+| `main.js`, `utilidades.js` | Arranque (conecta los módulos) y ayudas (`porId`, `bajarArchivo`...) |
 | `api/cliente.js`, `sondeo.js`, `ordenes.js`, `admin.js` | Peticiones, consulta cada 1 s, órdenes y pedidos de administración |
 | `camilla/movimiento.js` | Botón sostenido, estimación, "Ir a" y paro |
 | `camilla/mandos.js` | Eventos de los botones, Esc, Plano y Bloquear |
@@ -237,6 +240,7 @@ Sin compilación: el servidor junta las plantillas y el navegador carga módulos
 | `ui/pintado.js`, `ui/dibujo.js` | Pantalla y dibujo SVG; nunca mandan órdenes |
 | `ui/modales.js`, `avisos.js`, `formularios.js`, `registro.js` | Modales, toasts, ayudas de formularios y "Registro de comandos (desarrollo)" |
 | `vistas/acceso.js`, `sesion.js`, `cesion.js`, `pestanas.js`, `pacientes.js`, `usuarios.js` | Login y registro, entrar y salir, pasar el control, pestañas por rol, pacientes y perfiles |
+| `vistas/manuales.js`, `pin.js`, `pantalla.js` | Botón "Manuales", PIN de Registros y pantalla completa de la tablet |
 
 **`config.js` hoy:**
 
@@ -264,7 +268,8 @@ Sin compilación: el servidor junta las plantillas y el navegador carga módulos
 - **Sesión:** el token va en `sessionStorage`: cada pestaña cuenta como un dispositivo, y recargar no pide entrar otra vez.
 - **Roles:** el fisioterapeuta solo ve Control; el administrador ve Control, Registros y Usuarios.
 - **Pedido de control:** quien pide ve 30 s de espera; el titular tiene 30 s para decidir y, si no responde, se rechaza solo.
-- `window.camilla` expone `aplicarAngulos`, `topeAltura`, `estado`, `irA` y `paro` para probar desde la consola del navegador. Ningún dato del servidor llama a `topeAltura`.
+- **Pantalla completa (`vistas/pantalla.js`):** en un equipo táctil recordado, cada toque (`click`, no `pointerdown`) pide pantalla completa si no la tiene: oculta la barra de Android y la de Chrome. Android la quita al apagarse la pantalla y vuelve con el siguiente toque. La laptop no cambia.
+- `window.camilla` expone `aplicarAngulos`, `estado`, `irA` y `paro` para probar desde la consola del navegador. `topeAltura` y el aviso "En el tope ..." de la altura se quitaron el 24-11: la altura no tiene finales.
 
 ## 7. Red y arranque automático: `red/`
 
@@ -298,9 +303,21 @@ Detener un rato: `sudo systemctl stop camilla-pagina camilla-red` (al reiniciar 
 
 - **Piernas en el MD-BTS7960:** RPWM a GPIO 26, LPWM a GPIO 27, R_EN y L_EN a 3.3 V, VCC a 3V3 y GND al GND del ESP32. Los 2 actuadores en paralelo: M+ a sus cables A y M− a sus cables B. R_IS y L_IS sin conectar (pueden pasar de 3.3 V). En estas placas el GND de control y B− suelen estar unidos: comprobarlo con el multímetro.
 - **Cabeza en el L298N** (provisional, aguanta unos 2 A por canal): IN1 a GPIO 18, IN2 a GPIO 19, jumper de ENA puesto, OUT1 y OUT2 al actuador. 12 V con fusible de 3 A; GND a V− y al GND del ESP32; el 5V sin conectar, con el jumper del regulador puesto. Revisar que traiga sus 8 diodos y tocar el disipador al probar.
-- **Altura en el DRV8825** (placa morada con disipador; los pines tienen nombres de clon: STP, 1A/2A/1B/2B): STP a GPIO 25, DIR a 33, EN a 13, RST y SLP puenteados a 3.3 V. Fuente de 12 V solo a VMOT/GND, con un capacitor en VMOT (100 µF según `prueba_stepper.py`; en la guía se usó 1000 µF). Motor en 1A/2A y 1B/2B. Corriente = Vref × 2. Nunca conectar o desconectar el motor con la fuente encendida.
+- **Altura en el DRV8825** (placa morada con disipador; los pines tienen nombres de clon: STP, 1A/2A/1B/2B): STP a GPIO 25, DIR a 33, EN a 13, RST y SLP puenteados a 3.3 V. Fuente de 12 V solo a VMOT/GND, con un capacitor en VMOT (100 µF o más; en la guía se usó 1000 µF). Motor en 1A/2A y 1B/2B. Corriente = Vref × 2. Nunca conectar o desconectar el motor con la fuente encendida.
   - En la protoboard del usuario (disipador arriba, filas 18 a 25): a la izquierda GND, FLT, 2A, 1A, 1B, 2B, GND y VMOT; a la derecha DIR, STP, SLP, RST, M2, M1, M0 y EN.
-  - Al 16-11 el stepper no se mencionó como conectado. El ESP32 igual informa `altura`, así que la página deja usarla aunque no haya motor.
+  - El 24-11 el usuario cargó `main.py` y movió la altura desde la página. Sin finales de carrera.
+
+**Finales de carrera** (microswitch de 3 patas C, NO y NC; se usa **C a GND y NC al GPIO**, así un cable cortado también para):
+
+- Piernas: 17 arriba (al extender) y 16 abajo (al retraer), en `main.py`. Montados por el compañero; falta pasarlos a esos pines y probarlos.
+- Cabeza: 23 arriba y 32 abajo, previstos y sin código. Falta confirmar que en la cabeza extender = subir.
+- Altura: no lleva (decisión del 24-11).
+- El código del compañero (`compi.txt`, por WiFi) los tenía en 32 y 33; 33 es DIR de la altura.
+
+**Sensor de ángulo de piernas (24-11, sin decidir):** la bisagra es un tubo hueco de 16.5 mm por fuera y 13.7 mm por dentro, que gira con las piernas. Los cojines se juntan justo encima y la sección termina al ras del extremo del tubo. El módulo AS5600 (23 × 23 mm, imán de 3.5 mm) no cabe: rozaría con la sección al bajarla o quedaría salido para patearlo.
+
+- Recomendado: **MPU6050 (GY-521)** en una cajita impresa debajo de la sección de piernas (cualquier parte que gire con ella), por I2C en 21 y 22. Mide contra la gravedad y no se gasta. Hay que comprarlo; código nuevo.
+- Si tiene que ir en la bisagra: **potenciómetro RV09** (9 mm) con su eje en un tapón impreso dentro del tubo y el cuerpo fijo al asiento. Dura unos 10 000 a 15 000 ciclos; uno de plástico conductivo (Bourns 3382 o similar) dura mucho más. Va a 34, 36 o 39.
 
 **Definitivo (aprobado):** un MD-BTS7960 (43 A, 5.5 a 25 V) por sección, con los dos actuadores en paralelo.
 
@@ -316,9 +333,9 @@ Detener un rato: `sudo systemctl stop camilla-pagina camilla-red` (al reiniciar 
 
 | Uso | GPIO |
 |---|---|
-| Ocupados | 26, 27 (piernas); 18, 19 (cabeza); 25, 33, 13 (altura); 2 (LED); 1 y 3 (USB con la Raspberry) |
-| Reservados | 4 y 35: finales de carrera de la altura (abajo y arriba) |
-| Libres | 14, 16, 17, 21, 22 (21 y 22, mejor para I2C), 23, 32, 34, 36 y 39. Del 34 al 39 son solo de entrada y no tienen resistencia interna. |
+| Ocupados | 26, 27 (piernas); 18, 19 (cabeza); 25, 33, 13 (altura); 17, 16 (finales de piernas); 2 (LED); 1 y 3 (USB con la Raspberry) |
+| Reservados | 23 y 32: finales de la cabeza. 21 y 22: I2C (MPU6050). 34, 36 o 39: potenciómetro, si se usa |
+| Libres | 4, 14 (da pulsos al arrancar), 35, y los de 34/36/39 que no se usen. Del 34 al 39 son solo de entrada y no tienen resistencia interna (un final ahí necesita 10 kΩ a 3.3 V). En la WROVER, 16 y 17 no están libres: la placa es WROOM. |
 | No usar | 6 a 11 (memoria). Evitar 0, 5, 12 y 15, que son de arranque. |
 
 **Lista de compra pendiente:** fusibles 6 × 30 mm retardados (3 de 7.5 A y 3 de 10 A), 2 portafusibles en línea de 15 A o más, 2 resistencias de 10 kΩ, 2 BTS7960 y cable de 14 y 16 AWG. De la tienda **no sirven**: TVS de 3.3, 5, 9 o 12 V (conducen a 12 V y queman el fusible), SMBJ170CA y 1.5KE200CA (no actúan), SM12C (es para datos), ni un 1N4007 entre los cables del actuador (hace corto al invertir).
@@ -332,7 +349,7 @@ Detener un rato: `sudo systemctl stop camilla-pagina camilla-red` (al reiniciar 
 3. El paro se libera sin sesión, y `POST /api/paro {}` también lo apaga.
 4. El paro vive en memoria: reiniciar el servidor (o que systemd lo reinicie) lo borra.
 5. El hombre muerto del servidor para entre 1.0 y 1.5 s; el ESP32 para en 0.5 s si deja de recibir.
-6. Con `sinTope` y sin sensores, nada impide que un actuador empuje contra la estructura si se mantiene el botón: solo lo frena su tope interno.
+6. Con `sinTope` y sin sensores, nada impide que un actuador empuje contra la estructura si se mantiene el botón: solo lo frena su tope interno. Piernas ya tiene finales en el código (falta montarlos en 17 y 16); cabeza no, y la altura no los va a tener: el husillo sigue hasta su extremo.
 7. No hay tiempo máximo de marcha por sección.
 
 **Lo que la pantalla muestra y no es cierto:** grados y barra de altura estimados; "Ir a" y "Plano 0°", que no mueven nada pero dicen "Ajustando a ..."; "Un toque = 1°" y `+1°`/`−1°`. Cada pantalla tiene su propia estimación.
@@ -351,7 +368,8 @@ Detener un rato: `sudo systemctl stop camilla-pagina camilla-red` (al reiniciar 
 - Rechaza nombres como `José`, `Peña` o `Ana Lopez`, y contraseñas con símbolos.
 - La Pi no tiene reloj propio ni NTP en la red Camilla: las fechas pueden salir mal.
 - Cargar la página hace 49 peticiones. En la Pi no se ha medido.
-- `GUIA.md` e `INTEGRACION.md` no incluyen `esp32/`, `hardware.py`, `--simulador`, `n`, `hardware` en `/api/estado`, `python3-serial`, la reapertura del puerto ni el stepper, siguen nombrando `SIMULACION` (ya no existe) y dicen "Un toque = 1°" y que no hay ESP32.
+- `GUIA.md` e `INTEGRACION.md` no incluyen `esp32/`, `hardware.py`, `--simulador`, `n`, `hardware` en `/api/estado`, `python3-serial`, la reapertura del puerto ni el stepper, siguen nombrando `SIMULACION` (ya no existe) y dicen "Un toque = 1°" y que no hay ESP32. Tampoco la tablet, el PIN, las descargas, el portal ni los finales de piernas.
+- El manual técnico y el de usuario (rama `manuales` y sus guías publicadas) describen dos AS5600 y finales de carrera en la altura: ya no corresponde.
 
 **Conservar:** entrega de archivos limitada a `publico/`, SQL parametrizado, roles validados en el servidor y la máquina de estados del control.
 
@@ -360,17 +378,20 @@ Detener un rato: `sudo systemctl stop camilla-pagina camilla-red` (al reiniciar 
 **Decisiones del usuario:**
 
 1. **Pantalla sin sensores:** seguir con grados estimados, pasar a SUBIENDO / BAJANDO / EN REPOSO, o poner sensores. En cualquier caso hay que decidir qué pasa con "Ir a", "Plano 0°" y los textos de 1°.
-2. **Sensores de ángulo:** si se ponen y cuál. El 11-11 el usuario eligió para Piernas un encoder óptico absoluto en código Gray, de 0° a 90°, hecho por él (en la rama `backup-cambios-esp32`, sin piezas reales). Recomendación anterior: B10K para probar; WDD35D4 o el encoder para el final; nada incremental con pacientes. Análisis completo en `git show 1eaf7a2:CONTEXTO.md`.
+2. **Sensor de ángulo de piernas:** MPU6050 bajo la sección (recomendado) o potenciómetro en la bisagra (sección 8). El AS5600 no cabe en la bisagra. Historia: el 11-11 se pensó en un encoder óptico en código Gray (rama `backup-cambios-esp32`) y el 20-11 en dos AS5600 (rama `manuales`); análisis viejo en `git show 1eaf7a2:CONTEXTO.md`.
 3. **Perfiles:** registro abierto o que los cree el administrador.
 4. **Registro de uso:** solo cuentas y pacientes, o también un historial de quién movió la camilla y cuándo.
-5. **Altura:** qué husillo lleva (mm por vuelta) y si el NEMA 17 aguanta la camilla con una persona. Si no, NEMA 23 con reductor o actuador lineal con BTS7960. Si el husillo no es autobloqueante (paso largo, como T8×8), la camilla baja sola al cortar la energía: hace falta husillo de paso fino, freno o reductor.
+5. **Altura:** qué husillo lleva (mm por vuelta) y si el NEMA 17 aguanta la camilla con una persona. Como no lleva finales, el husillo tiene que aguantar llegar a su extremo, o hay que soltar a tiempo. Si no, NEMA 23 con reductor o actuador lineal con BTS7960. Si el husillo no es autobloqueante (paso largo, como T8×8), la camilla baja sola al cortar la energía: hace falta husillo de paso fino, freno o reductor.
 6. Si se deja la sección 11 de `INTEGRACION.md` en un documento que se va a evaluar.
+7. **Cabeza:** confirmar que extender = subir, para sus finales en 23 y 32.
 
 **Software que se puede hacer ya:**
 
 - Arreglo del paro (propuesta en la sección 13).
-- Finales de carrera de la altura en `main.py` (GPIO 4 y 35, como en `prueba_stepper.py`), informados en la línea `E` y mostrados en la página (`topeAltura`).
-- Tiempo máximo de marcha por sección en el ESP32.
+- Mostrar `final_piernas` en la página (hoy el servidor lo ignora): aviso "Piernas en el tope" y botón deshabilitado hacia ese lado.
+- Finales de la cabeza en `main.py` (23 y 32), igual que piernas, cuando se confirme la dirección.
+- Tiempo máximo de marcha por sección en el ESP32, sobre todo en la altura, que no tiene finales.
+- Corregir los manuales (AS5600 y finales de la altura ya no van).
 - Textos de la pantalla que no corresponden.
 - Bajar `HOMBRE_MUERTO` o revisar el servidor más seguido.
 - Aceptar tildes, ñ y espacios en los nombres.
@@ -379,6 +400,7 @@ Detener un rato: `sudo systemctl stop camilla-pagina camilla-red` (al reiniciar 
 
 **Hardware:**
 
+- Pasar los finales de piernas a 17 y 16 (C a GND, NC al GPIO), cargar `main.py` y probar: al arrancar debe decir `# finales de piernas: no`.
 - BTS7960 de Cabeza y su segundo actuador.
 - Paro físico: hongo con contactor que corte la fuente de motores.
 - Altura con carga: mantener Subir 5 s y medir los mm. Si zumba, se atora o baja solo, `PASOS_VELOCIDAD` a 800 o 600.
@@ -474,7 +496,9 @@ Si `/dev/ttyUSB0` aparece y desaparece: `sudo apt remove -y brltty`. No copiar l
 ## 12. Raspberry real
 
 - Usuario `diegocardona`. Carpeta del proyecto: **`~/Desktop/Camilla`** (confirmado el 23-11).
-- **Rama instalada: `desarrollo-final`** (`0373ed3`, 23-11). Antes tenía `muestra-citein`, la de la presentación del 13-11. Para volver a ella: `git checkout muestra-citein` y reiniciar `camilla-pagina`. Entre las dos ramas, `esp32/` y `red/` son iguales: no hace falta volver a cargar el ESP32.
+- **Rama instalada: `desarrollo-final`** (`b7895e3`, portal, el 24-11). Antes tenía `muestra-citein`, la de la presentación del 13-11. Para volver a ella: `git checkout muestra-citein` y reiniciar `camilla-pagina`. Desde `e1f6a15` (finales de piernas), `esp32/main.py` ya no es igual entre las dos ramas; `red/` sí.
+- **ESP32:** el 24-11 tenía el `main.py` de antes de los finales de piernas (respondió `# camilla lista`).
+- **Tablet de control:** Huawei, Android 7, Chrome 101. Entra con el perfil del usuario (más adelante, el de la licenciada de fisioterapia) y "Recordar este equipo". IP 10.42.0.121 el 24-11. Se probó por `adb` con depuración USB (ya se puede apagar).
 - Python 3.13, pyserial 3.5, permiso `dialout`, hostapd, dnsmasq, nft y nmcli instalados. Red Camilla y arranque automático instalados y funcionando (12-11).
 - El ESP32 aparece como `CP2102` (`10c4:ea60`) en `/dev/ttyUSB0`.
 - Se usa con pantalla, teclado y mouse USB, y por SSH desde la laptop.
@@ -495,6 +519,11 @@ Si `/dev/ttyUSB0` aparece y desaparece: `sudo apt remove -y brltty`. No copiar l
 - Altura con NEMA 17 y DRV8825 (13-11).
 - El servidor reabre el puerto si el ESP32 se queda mudo (`99a91cf`).
 - `compi.txt` no se agrega a `.gitignore` y no se sube.
+- Tablet fija de control (23-11): "Recordar este equipo", un perfil = una sesión, retoma el control al despertar solo si está libre, PIN de Registros con cierre a los 30 min, pantalla completa y app fijada en Android.
+- Portal (24-11): sin sesión, tipo hotel; con sesión, "sí hay internet" para que el equipo no salte de red (opción B).
+- Finales de piernas con contacto NC en 17 y 16 (24-11). La altura no lleva finales (24-11).
+- Solo `main.py`: `prueba_stepper.py` se borró (24-11).
+- AS5600 descartado en la bisagra de piernas: no cabe (24-11).
 
 **Propuesta del paro (sin aprobar):** el botón rojo solo activa; liberar va aparte, con confirmación y con sesión; `POST /api/paro` sin `activo` booleano responde 400; el paro se guarda en SQLite para que sobreviva a un reinicio.
 
@@ -511,7 +540,8 @@ Privadas de la cuenta del usuario. Algunas muestran planes viejos (por ejemplo, 
 - Cableado con relés, fusibles y TVS: https://claude.ai/artifact/1Gk6CeN5LLnTMpQpNV2bqg
 - Cableado final con BTS7960: https://claude.ai/artifact/BPPDzhjXEg8qiHQrK63hmF
 - Encoder de piernas: https://claude.ai/artifact/MAu8PJ5JfVQvSUGJZH4XQU
-- Stepper de la altura (DRV8825, Vref, micropasos): https://claude.ai/artifact/AW9F4AJEpPeUgS7757k2Cr
+- Stepper de la altura (DRV8825, Vref, micropasos; sin finales y solo con `main.py` desde el 24-11): https://claude.ai/artifact/AW9F4AJEpPeUgS7757k2Cr
+- Montaje del AS5600 (supone un perno con tuerca; la bisagra real es un tubo, así que no aplica): https://claude.ai/artifact/DwFKWLFjFtK2hQHj96AAH7
 - Puente H de las piernas (BTS7960 con 2 actuadores): https://claude.ai/artifact/1vXRyzqTNfADsvsiMQrvpW
 
 ## 15. Para la próxima Claude
@@ -541,6 +571,8 @@ Privadas de la cuenta del usuario. Algunas muestran planes viejos (por ejemplo, 
 - Una orden `detener` nunca se descarta, aunque su número sea viejo.
 - Al abrir el puerto el ESP32 se reinicia: `ESPERA_ARRANQUE` (6 s) debe ser mayor que `SILENCIO_REABRIR` (3 s), o se queda reabriendo en bucle.
 - `MODULO = "reles"` usa 25 y 33, los mismos de la altura: en ese modo no se crea la altura.
+- Un final de carrera configurado en `main.py` y sin conectar se lee como tocado (NC con pull-up): piernas no se mueve. Para probar sin ellos, `PIERNAS_FINAL_ARRIBA = None` y `PIERNAS_FINAL_ABAJO = None`.
+- `hardware.leer_respuesta` ignora lo que en la línea `E` no es una sección (`final_piernas`): se puede agregar datos sin romper el servidor.
 - `encender_red.sh` filtra el texto de `anotar()` y la línea `"GET / `: cambiar esas frases rompe su monitor.
 - `ESPERA_SOLICITUD` es 35 s en el servidor y 30 s en la página, a propósito.
 - `solicitud.usuario` y `respuesta.usuario` traen el nombre para mostrar, no el usuario.

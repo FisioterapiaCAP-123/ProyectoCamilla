@@ -1,8 +1,8 @@
 /* Parametros del panel. Los limites de angulo deben coincidir con
    LIMITES en web/servidor.py.
 
-   ALTURA es distinta a las otras dos: no tiene sensor de posicion, asi que
-   no se muestran centimetros. Solo se sabe si esta en un final de carrera.
+   ALTURA es distinta a las otras dos: no tiene sensor de posicion ni finales
+   de carrera, asi que no se muestran centimetros.
    Su valor 0-100 es una estimacion interna que SOLO sirve para animar el
    dibujo y la barra; nunca se muestra como numero. */
 export const CONFIG = {

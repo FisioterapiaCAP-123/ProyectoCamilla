@@ -6,8 +6,21 @@ puente H BTS7960, la cabeza con un L298N y la altura con un motor paso a paso
 (NEMA 17 con driver DRV8825). Con MODULO = "reles", solo la cabeza, con el
 modulo de 4 reles.
 
-Altura (DRV8825): GPIO 25 -> STP, GPIO 33 -> DIR, GPIO 13 -> EN, RST+SLP a 3.3 V,
-GND comun. La conexion completa esta al inicio de prueba_stepper.py.
+Altura, ESP32 -> DRV8825 (placa morada; STEP se llama STP):
+    GPIO 25 -> STP
+    GPIO 33 -> DIR
+    GPIO 13 -> EN        (activo en bajo: 0 = motor con fuerza, 1 = suelto)
+    3.3 V   -> RST y SLP (los dos juntos)
+    GND     -> GND del driver, comun con el GND de la fuente del motor
+    Fuente del motor (12-24 V) -> VMOT y GND, con un capacitor de 100 uF o mas junto
+        al driver. La fuente va SOLO al driver: nunca al motor ni al ESP32.
+    M0, M1, M2 sin conectar = paso completo (PASOS_* estan en pasos completos)
+DRV8825 -> NEMA 17: 1A, 2A -> bobina A; 1B, 2B -> bobina B (en otras placas A1, A2,
+    B1, B2). La pareja de una bobina suena en continuidad con el multimetro. Si gira
+    al reves no se cambian cables: se cambia SUBIR_CON_DIR.
+Corriente del driver = Vref x 2 (Vref entre el potenciometro y GND).
+La altura no tiene finales de carrera: se mueve solo mientras se mantiene el boton.
+Nunca conectar o desconectar el motor con la fuente encendida: se quema el driver.
 
 Finales de carrera de piernas: contacto NC del microswitch entre el GPIO y GND
 (C y NC; sin resistencia, se usa la interna). GPIO 17 = arriba (al extender),

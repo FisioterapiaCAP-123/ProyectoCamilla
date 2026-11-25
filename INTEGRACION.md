@@ -273,9 +273,8 @@ Ana (pide)                       Servidor                     Antonio (titular)
 |---|---|---|
 | Ángulo de cabeza y de piernas | `telemetria`, que sale de `Camilla.angulos` (valores simulados) | Compartido por todas las pantallas |
 | Barra y dibujo de la altura | Variable local `panel.valor.altura` de la página | Solo esa página. Parte de 50 al cargar y no se envía al servidor. |
-| "En el tope superior" y "En el tope inferior" | Límites 100 y 0 de la estimación local | Solo esa página |
 
-- `/api/estado` no incluye altura ni finales de carrera. La función `window.camilla.topeAltura()` existe en la página, pero ningún dato del servidor la invoca.
+- `/api/estado` no incluye la altura. La altura no tiene sensor ni finales de carrera.
 - La altura usa una escala interna de 0 a 100 que nunca se muestra como número. Con el botón pulsado avanza 2 unidades cada 70 ms.
 - La página no tiene cifra ni campo "Ir a" para la altura. Cambiar `CONFIG.altura.numerica` a `true` no los agrega: esos elementos no existen en el HTML y el script fallaría.
 - Mientras una página mueve la camilla, la cifra se calcula en esa misma página. La telemetría solo se aplica cuando no hay movimiento en curso y pasaron 1.5 s desde la última orden.
@@ -596,7 +595,6 @@ Las rutas son relativas a `web/publico/vendor/`. Son archivos de terceros: no se
 | Miembro | Función |
 |---|---|
 | `aplicarAngulos({cabeza, piernas})` | Aplica una lectura de ángulos a la pantalla |
-| `topeAltura('superior' o 'inferior' o null)` | Marca un final de carrera de altura en la pantalla |
 | `estado()` | Devuelve `{cabeza, piernas, paro, bloqueo}` |
 | `irA(objetivos, nombre)` | Inicia un movimiento a un destino |
 | `paro(remoto)` | Activa el paro |

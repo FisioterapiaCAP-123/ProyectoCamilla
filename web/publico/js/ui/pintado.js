@@ -6,7 +6,6 @@ import { pintarDibujo } from './dibujo.js';
 
 const el = {
   vistaPanel:   porId('vistaPanel'),
-  topeAltura:   porId('topeAltura'),
   estado:       porId('estado'),
   estadoTexto:  porId('estadoTexto'),
   cintaParo:    porId('cintaParo'),
@@ -46,33 +45,13 @@ function pintarRiel(seccion) {
   }
 }
 
-/* Finales de carrera: lo unico que de verdad se sabe de la altura */
-function pintarTopeAltura() {
-  const c = CONFIG.altura;
-  const altura = panel.valor.altura;
-  if (c.sinTope) {
-    el.topeAltura.classList.add('d-none');   // la estimacion no sabe donde esta el motor real
-  } else if (altura >= c.max) {
-    el.topeAltura.classList.remove('d-none');
-    el.topeAltura.textContent = 'En el tope superior';
-  } else if (altura <= c.min) {
-    el.topeAltura.classList.remove('d-none');
-    el.topeAltura.textContent = 'En el tope inferior';
-  } else {
-    el.topeAltura.classList.add('d-none');
-  }
-}
-
 function pintarSeccion(seccion) {
   const suf = SUFIJO[seccion];
   const { destino, valor, hardware } = panel;
   pintarRiel(seccion);
   porId('tarjeta' + suf).classList.toggle('en-movimiento', estaMoviendo(seccion));
   porId('sinActuador' + suf).classList.toggle('d-none', !hardware.conectado || hardware.secciones.includes(seccion));
-  if (seccion === 'altura') {
-    pintarTopeAltura();
-    return;
-  }
+  if (seccion === 'altura') return;   // sin sensor ni finales: no hay numero que mostrar
   porId('val' + suf).textContent = conSigno(valor[seccion]);
   porId('obj' + suf).textContent = (destino && destino[seccion] !== null) ? conSigno(destino[seccion]) + '°' : '—';
 }
