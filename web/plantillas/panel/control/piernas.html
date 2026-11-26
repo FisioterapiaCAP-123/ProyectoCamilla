@@ -5,6 +5,9 @@
       <h2 class="tipo-titulo text-uppercase mb-0 titulo-tarjeta">Piernas</h2>
       <span class="badge text-bg-danger tipo-dato text-uppercase ms-auto d-none" id="topePiernas">Tope</span>
       <span class="badge text-bg-secondary tipo-dato text-uppercase ms-auto d-none" id="sinActuadorPiernas">Sin actuador</span>
+      <span class="badge tipo-dato text-uppercase ms-auto" id="sensorPiernas" title="De dónde sale el ángulo">Estimado</span>
+      <button type="button" class="btn btn-sm btn-outline-secondary tipo-titulo text-uppercase fw-semibold d-none"
+              id="btnCalibrarPiernas" data-abrir-calibrar="piernas">Calibrar</button>
     </div>
     <div class="card-body d-flex flex-column gap-3">
 
@@ -49,6 +52,28 @@
       <p class="small text-center mb-0 text-body-secondary">
         Toque breve: 1&deg;. Mantener presionado: movimiento continuo.
       </p>
+
+      <!-- Calibrar el sensor de angulo (vistas/calibrar.js): solo administrador. Va dentro de la
+           tarjeta y no en un modal, porque entre "plano" y "subido" hay que mover la seccion. -->
+      <div class="border border-2 rounded-3 p-3 d-none calibrar" id="calibrarPiernas">
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <b class="tipo-titulo text-uppercase">Calibrar el sensor de piernas</b>
+          <button type="button" class="btn-close ms-auto" data-cerrar-calibrar="piernas" aria-label="Cerrar calibración"></button>
+        </div>
+        <ol class="small ps-3 mb-2">
+          <li>Baja la sección a plano y confírmalo con el nivel del celular: 0&deg;. Toca <b>Guardar plano</b>.</li>
+          <li>Sube la sección unos 30&deg; (al menos 15&deg;) y toca <b>Guardar subido</b>.</li>
+          <li>Comprueba con el nivel del celular a 15&deg; y 30&deg;: la diferencia debe ser de 1&deg; o menos.</li>
+        </ol>
+        <div class="d-flex gap-2 flex-wrap">
+          <button type="button" class="btn btn-outline-primary flex-fill tipo-titulo text-uppercase fw-semibold"
+                  data-calibrar="piernas" data-posicion="plano">Guardar plano</button>
+          <button type="button" class="btn btn-outline-primary flex-fill tipo-titulo text-uppercase fw-semibold"
+                  data-calibrar="piernas" data-posicion="subido">Guardar subido</button>
+        </div>
+        <p class="small fw-semibold mb-0 mt-2" id="calEstadoPiernas" aria-live="polite"></p>
+        <p class="small text-danger mb-0 mt-1" id="calMensajePiernas"></p>
+      </div>
 
       <div class="bg-body-tertiary border rounded-3 p-2">
         <label for="campoPiernas" class="form-label tipo-titulo text-uppercase fw-semibold mb-1 rotulo-campo-compacto">Ir a</label>

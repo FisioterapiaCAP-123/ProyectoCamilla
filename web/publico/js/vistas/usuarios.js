@@ -30,7 +30,8 @@ function menuAcciones(u) {
     '<button type="button" class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown" ' +
             'data-bs-popper-config=\'{"strategy":"fixed"}\' aria-expanded="false">Opciones</button>' +
     '<ul class="dropdown-menu dropdown-menu-end shadow">' +
-      opcion('rol', u.id, u.rol === 'admin' ? 'Hacer fisioterapeuta' : 'Hacer administrador') +
+      /* el rol Desarrollador solo se da y se quita desde la terminal */
+      (u.rol === 'dev' ? '' : opcion('rol', u.id, u.rol === 'admin' ? 'Hacer fisioterapeuta' : 'Hacer administrador')) +
       opcion('activo', u.id, u.activo ? 'Desactivar' : 'Activar') +
       opcion('clave', u.id, 'Cambiar contraseña') +
       '<li><hr class="dropdown-divider"></li>' +
@@ -40,7 +41,8 @@ function menuAcciones(u) {
 
 function filaUsuario(u) {
   const yo = u.usuario === sesion.usuario;
-  let rol = `<span class="badge rounded-pill ${u.rol === 'admin' ? 'text-bg-primary' : 'text-bg-light border'}">${esc(ROLES[u.rol] || u.rol)}</span>`;
+  const tono = { admin: 'text-bg-primary', dev: 'text-bg-dark' }[u.rol] || 'text-bg-light border';
+  let rol = `<span class="badge rounded-pill ${tono}">${esc(ROLES[u.rol] || u.rol)}</span>`;
   if (!u.activo) rol += ' <span class="badge rounded-pill text-bg-danger">Desactivado</span>';
   const acciones = yo ? '<span class="badge rounded-pill text-bg-success">Tú</span>' : menuAcciones(u);
   return `<tr${u.activo ? '' : ' class="opacity-75"'}>` +

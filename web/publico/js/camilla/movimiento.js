@@ -1,7 +1,7 @@
 /* Movimiento de la camilla: botones sostenidos, "Ir a" y paro. */
 import { SERVIDOR } from '../api/ordenes.js';
 import { CONFIG, RITMO, SECCIONES, SUFIJO } from '../config.js';
-import { panel, puedeMover } from '../estado.js';
+import { conSensor, panel, puedeMover } from '../estado.js';
 import { anunciar, pintar } from '../ui/pintado.js';
 import { registrar } from '../ui/registro.js';
 import { porId, signo } from '../utilidades.js';
@@ -11,6 +11,7 @@ const topeId = { cabeza: null, piernas: null };
 
 function darPaso(seccion, dir) {
   const c = CONFIG[seccion];
+  if (conSensor(seccion)) return true;   // el angulo lo trae el sensor: no se estima
   const siguiente = Math.max(c.min, Math.min(c.max, panel.valor[seccion] + dir * c.paso));
   if (siguiente === panel.valor[seccion]) {
     if (c.sinTope) return true;   // el numero llego al limite, pero el actuador puede seguir
@@ -18,7 +19,6 @@ function darPaso(seccion, dir) {
     return false;
   }
   panel.valor[seccion] = siguiente;
-  if (!c.continua) SERVIDOR.paso(seccion, dir);   // con motor continuo no hay comando por paso
   pintar();
   return true;
 }
@@ -79,13 +79,18 @@ export function irA(objetivos, nombre) {
   if (!puedeMover()) return;
   detenerTodo();
 
+  /* "Ir a" todavia no mueve motores: solo anima la estimacion. Con sensor real no se finge */
   const destino = { altura: null, cabeza: null, piernas: null, nombre, timerId: null };
-  panel.destino = destino;
   SECCIONES.forEach((s) => {
-    if (typeof objetivos[s] === 'number') {
+    if (typeof objetivos[s] === 'number' && !conSensor(s)) {
       destino[s] = Math.round(Math.min(CONFIG[s].max, Math.max(CONFIG[s].min, objetivos[s])));
     }
   });
+  if (SECCIONES.every((s) => destino[s] === null)) {
+    registrar('DESTINO ' + nombre.toUpperCase() + ': con sensor real, "Ir a" todavía no mueve los motores');
+    return;
+  }
+  panel.destino = destino;
   registrar('DESTINO ' + nombre.toUpperCase() + '  ' +
     SECCIONES.filter((s) => destino[s] !== null).map((s) => s + '=' + destino[s]).join('  '));
 

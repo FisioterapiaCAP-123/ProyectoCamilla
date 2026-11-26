@@ -64,3 +64,4 @@
 /* --- Registro de comandos --- */
 .resumen-registro{letter-spacing:.05em;cursor:pointer}
 .log-salida{max-height:180px;overflow:auto;font-size:.8rem;line-height:1.7}
+.log-salida.log-alto{max-height:320px;white-space:pre-wrap;word-break:break-word}

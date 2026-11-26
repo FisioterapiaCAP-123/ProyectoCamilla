@@ -1,5 +1,5 @@
-/* Parametros del panel. Los limites de angulo deben coincidir con
-   LIMITES en web/servidor.py.
+/* Parametros del panel. Los limites de angulo son los del dibujo y del riel; con sensor
+   (MPU6050) el numero muestra el angulo real aunque se salga de ellos.
 
    ALTURA es distinta a las otras dos: no tiene sensor de posicion ni finales
    de carrera, asi que no se muestran centimetros.
@@ -29,9 +29,11 @@ export const SECCIONES_NUMERICAS = SECCIONES.filter((s) => CONFIG[s].numerica);
 /* Sufijo de los id del HTML: valCabeza, rellenoPiernas, tarjetaAltura... */
 export const SUFIJO = { altura: 'Altura', cabeza: 'Cabeza', piernas: 'Piernas' };
 
-export const ROLES = { admin: 'Administrador', fisio: 'Fisioterapeuta' };
+export const ROLES = { admin: 'Administrador', fisio: 'Fisioterapeuta', dev: 'Desarrollador' };
+/* Desarrollador = administrador + depuracion + calibrar sensores. Solo se da desde la terminal. */
+export const esAdmin = (rol) => rol === 'admin' || rol === 'dev';
 
-export const CONSULTA_MS = 1000;      // cada cuanto se pregunta el estado al servidor
+export const CONSULTA_MS = 300;       // cada cuanto se pregunta el estado al servidor (trae el angulo de los sensores)
 export const FALLOS_PARA_CAIDA = 3;   // consultas fallidas seguidas antes de "Sin conexion"
 export const MANTENER_MS = 400;       // un motor continuo se mantiene repitiendo "mover" (hombre muerto)
 export const ESPERA_SOLICITUD = 30;   // segundos que espero una respuesta

@@ -1,3 +1,4 @@
+import collections
 import json
 import re
 import secrets
@@ -16,7 +17,7 @@ import reloj
 
 PUERTO_WEB = 8000
 IP_RED = "10.42.0.1"  # IP de la Raspberry en su propia red WiFi "Camilla"
-TIEMPO_LIBERAR = 10  # segundos sin noticias de quien tiene el control para liberarlo (la pagina consulta cada 1 s)
+TIEMPO_LIBERAR = 10  # segundos sin noticias de quien tiene el control para liberarlo (la pagina consulta cada 300 ms)
 ESPERA_SOLICITUD = 35  # segundos que dura un pedido de control sin respuesta (las paginas cuentan 30)
 HOMBRE_MUERTO = 1.0  # segundos sin "mover" para parar un motor continuo (la pagina lo repite mientras se mantiene el boton)
 SESION_HORAS = 12  # una sesion que no se usa en este tiempo se borra
@@ -29,14 +30,13 @@ PRUEBAS_INTERNET = {
     "/hotspot-detect.html": (200, EXITO_APPLE),      # iPhone, iPad y Mac
     "/library/test/success.html": (200, EXITO_APPLE),
 }
-LIMITES = {"cabeza": (-30, 70), "piernas": (0, 45)}  # grados: iguales a CONFIG en publico/js/config.js
 SECCIONES = ("altura", "cabeza", "piernas")
 
 # Manuales en PDF (web/manuales/). Se leen en cada descarga: para cambiar uno basta con reemplazar el archivo
 CARPETA_MANUALES = Path(__file__).parent / "manuales"
 MANUALES = {  # tipo -> (archivo, quien lo puede bajar)
-    "usuario": ("manual-usuario.pdf", ("fisio", "admin")),
-    "tecnico": ("manual-tecnico.pdf", ("admin",)),
+    "usuario": ("manual-usuario.pdf", ("fisio", "admin", "dev")),
+    "tecnico": ("manual-tecnico.pdf", ("admin", "dev")),
 }
 
 # PIN del equipo recordado: en la tablet, Registros y Usuarios se abren con PIN y se cierran
@@ -57,7 +57,7 @@ def duracion(segundos):
 
 def con_pin(sesion):
     """Registros y Usuarios piden PIN en un equipo recordado de un administrador."""
-    return bool(sesion["llave"]) and sesion["rol"] == "admin"
+    return bool(sesion["llave"]) and sesion["rol"] in basedatos.ADMINS
 
 
 # Lo que ve una pagina cuya sesion cerro otro (los motivos son los de Camilla.cerrar)
@@ -70,14 +70,19 @@ AVISOS_CIERRE = {
 LARGO_JSON = 4096  # bytes que se aceptan en una peticion
 LARGO_EXCEL = 64 * 1024  # la descarga de Excel manda la lista de registros que se ven (hasta ~9000)
 
-SILENCIO = ("/api/estado", "/api/mover", "/api/paso", "/vendor/", "/css/", "/js/")  # se piden muy seguido: no se anotan en el registro
+SILENCIO = ("/api/estado", "/api/mover", "/api/depuracion", "/vendor/", "/css/", "/js/")  # se piden muy seguido: no se anotan en el registro
 
 candado = threading.Lock()  # una cosa a la vez: todo el estado de la camilla
 
 
+REGISTRO = collections.deque(maxlen=60)  # los ultimos mensajes, para la depuracion del perfil Desarrollador
+
+
 def anotar(texto):
     """Mensaje al registro (la terminal, o journalctl -t python3 con la red encendida)."""
-    print(reloj.texto("[%d/%b/%Y %H:%M:%S]"), texto, file=sys.stderr, flush=True)
+    linea = f"{reloj.texto('[%d/%b/%Y %H:%M:%S]')} {texto}"
+    REGISTRO.append(linea)
+    print(linea, file=sys.stderr, flush=True)
 
 
 class Camilla:
@@ -95,7 +100,6 @@ class Camilla:
         self.solicitud = None  # pedido de control pendiente: {"id", "usuario", "nombre", "token", "creada"}
         self.respuestas = {}  # token de quien pidio el control -> {"aceptada", "usuario"}: se entrega una vez
         self.paro = False  # paro de emergencia: lo puede activar o liberar cualquiera
-        self.angulos = {"cabeza": 0, "piernas": 0}  # posicion simulada mientras no haya sensores
         self.motor = None  # motor continuo en marcha: {"seccion", "dir", "visto"}
         self.hardware = hardware.Simulador()  # al arrancar, servidor.py pone aqui el ESP32
 
@@ -246,11 +250,17 @@ class Camilla:
             self.parar_motores(f"{usuario} solto el boton")
         return True, None
 
-    def paso(self, usuario, seccion, grados):
-        if not self.puede_mover(usuario, seccion) or seccion not in LIMITES:
-            return False, None
-        minimo, maximo = LIMITES[seccion]
-        self.angulos[seccion] = max(minimo, min(maximo, self.angulos[seccion] + grados))
+    def calibrar(self, usuario, seccion, posicion):
+        """Guarda la posicion actual de la seccion ("plano" o "subido") para su sensor de angulo."""
+        sensor = self.hardware.estado().get("sensores", {}).get(seccion)
+        if sensor is None:
+            return False, "Esta sección no tiene sensor de ángulo conectado."
+        if sensor["estado"] == "falla":
+            return False, "El sensor no responde: revisa sus cables."
+        if self.motor and self.motor["seccion"] == seccion:
+            return False, "Detén la sección antes de calibrar."
+        self.hardware.calibrar(seccion, posicion)
+        anotar(f"{usuario} calibro el sensor de {seccion}: {posicion}" + (" (simulado)" if self.hardware.simulado else ""))
         return True, None
 
     def cambiar_paro(self, activo, quien):
@@ -261,6 +271,24 @@ class Camilla:
             self.parar_motores("paro de emergencia")
         return True, None
 
+    def depuracion(self):
+        """Solo para el perfil Desarrollador: lo que pasa por dentro."""
+        t = time.monotonic()
+        motor = None
+        if self.motor:
+            motor = {"seccion": self.motor["seccion"], "dir": self.motor["dir"], "hace_ms": int((t - self.motor["visto"]) * 1000)}
+        return {
+            "simulacion": self.hardware.simulado,
+            "esp32": self.hardware.depuracion(),
+            "sensores": self.hardware.estado().get("sensores", {}),
+            "motor": motor,
+            "titular": self.titular,
+            "paro": self.paro,
+            "sesiones": [{"usuario": s["usuario"], "rol": s["rol"], "ip": s["ip"], "hace_s": round(t - s["visto"], 1)}
+                         for s in self.sesiones.values()],
+            "registro": list(REGISTRO),
+        }
+
     # ---------- lo que la pagina consulta cada segundo ----------
     def control(self):
         """Quien tiene el control: "titular" es el nombre que se muestra, "usuario" lo identifica."""
@@ -268,6 +296,7 @@ class Camilla:
 
     def estado(self, sesion, token):
         usuario = sesion["usuario"] if sesion else None
+        equipo = self.hardware.estado()
         return {
             "usuario": usuario,
             "nombre": sesion["nombre"] if sesion else None,
@@ -275,7 +304,7 @@ class Camilla:
             "control": self.control(),
             "paro": self.paro,
             "simulacion": self.hardware.simulado,
-            "hardware": self.hardware.estado(),
+            "hardware": equipo,
             # el pedido de control solo le llega a quien tiene el control
             "solicitud": ({"id": self.solicitud["id"], "usuario": self.solicitud["nombre"]}
                           if self.solicitud and usuario and usuario == self.titular else None),
@@ -287,7 +316,8 @@ class Camilla:
             "registros": ({"pin": sesion["pin"], "abierto": time.monotonic() < sesion["abierto_hasta"],
                            "pide_clave": not sesion["con_clave"]}
                           if sesion and con_pin(sesion) else None),
-            "telemetria": dict(self.angulos),
+            # angulo real de las secciones con sensor calibrado (MPU6050)
+            "telemetria": {s: v["angulo"] for s, v in equipo.get("sensores", {}).items() if v["angulo"] is not None},
         }
 
     def vigilar(self):
@@ -344,6 +374,15 @@ def accion_mover(c, d, s, t):
     return c.mover(s["usuario"], *movimiento)
 
 
+def accion_calibrar(c, d, s, t):
+    if s["rol"] != "dev":
+        return False, "Solo el perfil Desarrollador puede calibrar los sensores."
+    seccion, posicion = d.get("seccion"), d.get("posicion")
+    if seccion not in ("cabeza", "piernas") or posicion not in ("plano", "subido"):
+        return False, None
+    return c.calibrar(s["usuario"], seccion, posicion)
+
+
 def accion_detener(c, d, s, t):
     orden_vigente(s, d)  # detener nunca se descarta, pero deja atras a los "mover" atrasados
     return c.detener(s["usuario"], d.get("seccion"))
@@ -357,7 +396,7 @@ ACCIONES = {
     "/api/control/responder": lambda c, d, s, t: c.responder(s["usuario"], d.get("id"), d.get("aceptar") is True),
     "/api/control/liberar": lambda c, d, s, t: c.soltar(s["usuario"]),
     "/api/mover": accion_mover,
-    "/api/paso": lambda c, d, s, t: (c.paso(s["usuario"], *m) if (m := seccion_y_direccion(d, "grados")) else (False, None)),
+    "/api/calibrar": accion_calibrar,
     "/api/detener": accion_detener,
 }
 
@@ -400,6 +439,8 @@ def administrar(ruta, datos, admin):
     if ruta == "/api/usuarios/rol":
         if datos.get("rol") not in basedatos.ROLES:
             return {"ok": False, "mensaje": "Ese rol no existe."}
+        if perfil["rol"] == "dev":
+            return {"ok": False, "mensaje": "El rol Desarrollador solo se cambia desde la terminal de la Raspberry."}
         basedatos.cambiar_usuario(perfil["id"], rol=datos["rol"])
         with candado:
             camilla.cambiar_rol(perfil["id"], datos["rol"])
@@ -488,11 +529,15 @@ class Manejador(BaseHTTPRequestHandler):
                 camilla.cerrar(token, "salio")
             elif ruta in ACCIONES:
                 ok, mensaje = ACCIONES[ruta](camilla, datos, sesion, token)
+            elif ruta == "/api/depuracion":
+                if perfil["rol"] != "dev":
+                    return self.json(403, {"ok": False, "mensaje": "Solo el perfil Desarrollador."})
+                ok, depuracion = None, camilla.depuracion()
             elif ruta in ("/api/manual", "/api/pin/abrir", "/api/pin/crear", "/api/pin/cerrar", "/api/pin/seguir"):
                 ok = None  # el archivo y el PIN se leen fuera del candado
             elif not ruta.startswith(("/api/pacientes/", "/api/usuarios/")):
                 return self.responder(404, b"No encontrado", "text/plain")
-            elif perfil["rol"] != "admin":
+            elif perfil["rol"] not in basedatos.ADMINS:
                 return self.json(403, {"ok": False, "mensaje": "Solo un administrador puede entrar aquí."})
             elif con_pin(sesion) and time.monotonic() >= sesion["abierto_hasta"]:
                 return self.json(200, {"ok": False, "bloqueado": True, "mensaje": "Registros está bloqueado. Ingresa tu PIN."})
@@ -501,6 +546,8 @@ class Manejador(BaseHTTPRequestHandler):
                 if con_pin(sesion):  # se usa: sigue abierto
                     sesion["abierto_hasta"] = time.monotonic() + REGISTROS_ABIERTO
         if ok is None:
+            if ruta == "/api/depuracion":
+                return self.json(200, dict(depuracion, ok=True))
             if ruta == "/api/manual":
                 return self.manual(datos, perfil)
             if ruta.startswith("/api/pin/"):

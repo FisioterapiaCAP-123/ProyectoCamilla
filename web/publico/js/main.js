@@ -8,6 +8,8 @@ import { pintar, prepararEscalas } from './ui/pintado.js';
 import { iniciarDiagnostico, registrar } from './ui/registro.js';
 import { porId } from './utilidades.js';
 import { iniciarAcceso } from './vistas/acceso.js';
+import { iniciarCalibrar } from './vistas/calibrar.js';
+import { iniciarDepuracion } from './vistas/depuracion.js';
 import { iniciarCesion } from './vistas/cesion.js';
 import { iniciarManuales } from './vistas/manuales.js';
 import { iniciarPacientes } from './vistas/pacientes.js';
@@ -26,6 +28,8 @@ iniciarPestanas();
 iniciarPacientes();
 iniciarUsuarios();
 iniciarManuales();
+iniciarCalibrar();
+iniciarDepuracion();
 iniciarPantalla();
 exponerApi();
 

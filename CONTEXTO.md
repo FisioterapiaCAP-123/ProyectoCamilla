@@ -15,19 +15,19 @@
 | Cabeza | 1 actuador 3000N (de 2) en un L298N (GPIO 18 y 19). Probado en la placa real. Faltan su BTS7960 y el segundo actuador. Finales previstos en GPIO 4 (arriba) y 32 (abajo), sin código; antes se pensaba en 23 para arriba. |
 | Altura | NEMA 17 con DRV8825 (GPIO 25, 33 y 26 desde el 26-11; antes EN en el 13). Probado sin carga el 13-11 y desde la página el 24-11. **Sin finales de carrera** (decisión del 24-11): se mueve solo mientras se mantiene el botón. Husillo sin definir. |
 | Placa propia del ESP32 | Diseñada el 25-11: una cara, 106 × 70 mm, para fresar en CNC. Sin fresar. Cambia 3 pines (sección 8); `main.py` ya los usa desde el 26-11. |
-| Ángulos y altura en pantalla | Estimados: no hay sensores. Cada página calcula su propia estimación y las demás pantallas no la ven. El sensor de piernas está sin decidir (sección 8). |
+| Ángulos y altura en pantalla | Rama `mpu-angulos` (26-11, sin probar en la camilla): piernas con MPU6050, ángulo real y calibración desde la página (sección 3). Sin sensor calibrado, y siempre en la altura, el valor es una estimación de cada página. |
 | Tablet de control | Funciona (23 y 24-11, Huawei con Android 7): "Recordar este equipo", PIN de Registros, pantalla completa, app fijada y sin aviso de "sin internet". |
 | "Ir a" y "Plano 0°" | Solo mueven el número y el dibujo. No mueven motores. |
 | Seguridad del movimiento | Hombre muerto en la página, el servidor y el ESP32; watchdog; órdenes numeradas; paro lógico. **No hay paro físico.** |
 | Perfiles, roles y pacientes | Completo, en SQLite. Registro de perfiles abierto. Sin bitácora de uso. |
 | Red Camilla y arranque automático | Instalados y funcionando en la Raspberry desde el 12-11. Portal: sin sesión la página se abre sola; con sesión el equipo se queda en la red (probado con la tablet el 24-11). |
-| Tiempo real | Sin WebSocket: la página consulta cada 1 s. |
+| Tiempo real | Sin WebSocket: la página consulta cada 300 ms (antes 1 s, se bajó para ver el ángulo del sensor). |
 
 ## 2. Arquitectura
 
 ```text
 Navegador (celular o PC)
-  GET  /api/estado cada 1 s
+  GET  /api/estado cada 300 ms
   POST /api/mover cada 400 ms mientras se mantiene un botón; /api/detener al soltar
       |  WiFi "Camilla" (hostapd, WPA2, sin internet). La Raspberry es 10.42.0.1
 Raspberry Pi 4: web/servidor.py en el puerto 8000 (ThreadingHTTPServer, HTTP/1.0)
@@ -81,17 +81,22 @@ compi.txt     (sin seguimiento en git) código del compañero. TIENE LA CLAVE DE
 | Constante | Valor | Para qué |
 |---|---|---|
 | `MODULO` | `"puente"` | `"puente"`: piernas, cabeza y altura. `"reles"`: solo cabeza con el módulo de 4 relés (no crea la altura). |
-| `PIN_EXTENDER`, `PIN_RETRAER` | 26, 27 | Piernas: RPWM y LPWM del BTS7960 |
+| `PIN_EXTENDER`, `PIN_RETRAER` | 13, 27 | Piernas: RPWM y LPWM del BTS7960 (placa propia; antes 26 y 27) |
 | `PIN_HABILITAR` | `None` | R_EN y L_EN van a 3.3 V. Con un GPIO, se apaga al parar. |
 | `PIERNAS_FINAL_ARRIBA`, `PIERNAS_FINAL_ABAJO` | 17, 16 | Finales de carrera de piernas (al extender y al retraer), contacto NC a GND con la resistencia interna. `None` si no están conectados: sin conectar se leen como tocados y piernas no se mueve. El código del compañero (`compi.txt`, no se sube) usaba 32 y 33, pero 33 es DIR de la altura. |
 | `FINAL_ACTIVO` | 1 | Lo que lee el pin con el final tocado: 1 = NC (cable cortado también para), 0 = NO |
 | `CABEZA_EXTENDER`, `CABEZA_RETRAER` | 18, 19 | Cabeza: IN1 e IN2 del L298N (ENA con su jumper) |
 | `VELOCIDAD`, `FRECUENCIA_PWM` | 100 %, 1000 Hz | Puentes H: siempre a toda potencia |
 | `ALTURA_STEPPER` | `True` | Crea la sección `altura` |
-| `ALTURA_STEP`, `ALTURA_DIR`, `ALTURA_EN` | 25, 33, 13 | DRV8825: STP, DIR y EN (EN activo en bajo) |
+| `ALTURA_STEP`, `ALTURA_DIR`, `ALTURA_EN` | 25, 33, 26 | DRV8825: STP, DIR y EN (EN activo en bajo; antes 13) |
 | `SUBIR_CON_DIR` | 1 | Si "Subir" baja, se pone 0 |
 | `PASOS_INICIO`, `PASOS_ACELERACION`, `PASOS_VELOCIDAD` | 250, 1500, 1000 | Arranca a 250 pasos/s y llega a 1000 en 0.5 s (5 vueltas/s en paso completo). A 1000 de golpe un NEMA 17 zumba y no arranca. Si zumba o se atora con carga: 800 o 600. |
 | `MANTENER_FUERZA` | `True` | Quieto, el stepper sigue sujetando (EN siempre en 0) y se calienta |
+| `PIERNAS_MPU`, `CABEZA_MPU` | `0x68`, `None` | Dirección del MPU6050 de cada sección (`None` = sin sensor). Cabeza será `0x69` (AD0 a VCC). |
+| `MPU_SDA`, `MPU_SCL`, `MPU_FRECUENCIA` | 21, 22, 50000 | I2C compartido por los dos MPU. Con cables largos que fallen, 20000. |
+| `MPU_CADA_MS`, `MPU_SUAVIZADO` | 100, 0.3 | Se lee cada MPU cada 100 ms y se suaviza (además del filtro de 5 Hz del chip) |
+| `CALIBRACION_MINIMA` | 15 | Grados que "subido" tiene que quedar lejos de "plano" |
+| `ARCHIVO_CALIBRACION` | `calibracion.json` | En la memoria del ESP32; cargar `main.py` no lo borra |
 | `ACTIVO_BAJO` | `True` | Solo para los relés |
 | `PAUSA_CAMBIO_MS` | 300 | Pausa entre apagar una sección y volver a arrancarla o invertirla |
 | `LIMITE_SIN_ORDEN_MS` | 500 | Sin `M` en ese tiempo, la sección para sola |
@@ -115,8 +120,9 @@ Raspberry -> ESP32   M <seccion> 1    extender o subir; se repite cada 200 ms
                      S <seccion>      detener esa sección (el servidor no la usa)
                      X                detener todo
                      P                sigo aquí (cuando no hay movimiento)
-ESP32 -> Raspberry   E altura=detenido cabeza=extendiendo piernas=contrayendo final_piernas=no*XX
-                     # finales de piernas: no | # camilla lista | # altura desactivada: ... | # error: ...
+                     C <seccion> plano|subido   calibrar su MPU (solo con la sección quieta)
+ESP32 -> Raspberry   E altura=detenido cabeza=extendiendo piernas=contrayendo final_piernas=no ang_piernas=12.5*XX
+                     # finales de piernas: no | # sensor de piernas: 12.5 | # camilla lista | # altura desactivada: ... | # error: ...
 ```
 
 - Responde `E` a toda línea con comprobación correcta, aunque la orden no sea válida. Las líneas con comprobación mala se ignoran (si era un `M`, la sección para sola a los 500 ms).
@@ -125,7 +131,15 @@ ESP32 -> Raspberry   E altura=detenido cabeza=extendiendo piernas=contrayendo fi
 
 **Finales de carrera de piernas:** con el final de una dirección tocado, `Seccion.atender` apaga el puente H y no arranca hacia ese lado; hacia el otro sí. El pedido sigue: si fue ruido, arranca otra vez tras la pausa. La línea `E` agrega `final_piernas=no|arriba|abajo|falla` (falla = los dos a la vez, cable suelto) y al arrancar imprime `# finales de piernas: ...`. El servidor ignora ese dato por ahora (la página no lo muestra).
 
-**No hace:** leer finales de la cabeza (previstos en 4 y 32), contar pasos de la altura, medir corriente, limitar el tiempo de marcha ni informar posición. La altura no lleva finales de carrera (decisión del 24-11). Los estados y `final_piernas` de la línea `E` llegan al servidor, pero el servidor solo usa los nombres de las secciones.
+**Sensores de ángulo (MPU6050, rama `mpu-angulos`):** clase `Inclinometro`, uno por sección con dirección en la configuración, todos en el mismo I2C.
+
+- **Cálculo:** cada 100 ms lee la gravedad (x, y, z) y la suaviza. Con "plano" y "subido" guardados, el eje de la bisagra es su producto cruz, y el ángulo es el giro de la gravedad actual desde "plano" alrededor de ese eje: positivo hacia "subido". Así no importa cómo quedó montado el módulo (probado en simulación con 4 montajes, incluido uno torcido: error de 0.2° o menos).
+- **Línea `E`:** `ang_piernas=` el ángulo con un decimal, o `falla` (no responde), `sincal` (sin calibrar), `plano` (falta "subido") o `poco` ("subido" quedó a menos de 15° de "plano").
+- **`C piernas plano`** guarda la lectura actual como plano y borra "subido". **`C piernas subido`** la guarda como subido si está a 15° o más; si no, queda en `poco`. Con la sección en marcha, `C` se ignora.
+- **Falla:** tras 3 lecturas fallidas dice `falla` y reintenta cada 1 s. Si el módulo vuelve dormido (lee 0, 0, 0), lo despierta. Un MPU que falla nunca detiene los motores.
+- **No los usa para parar:** el ángulo solo se informa. Parar en 45° o "Ir a" con motores es el paso siguiente.
+
+**No hace:** leer finales de la cabeza (previstos en 4 y 32), contar pasos de la altura, medir corriente, limitar el tiempo de marcha ni parar por ángulo. La altura no lleva finales de carrera (decisión del 24-11). Los estados y `final_piernas` de la línea `E` llegan al servidor, pero el servidor solo usa los nombres de las secciones.
 
 **Solo `main.py`:** `prueba_stepper.py` (prueba del stepper desde Thonny, con finales opcionales en GPIO 4 y 35) se borró el 24-11; sigue en git (`git show e1f6a15:esp32/prueba_stepper.py`). La conexión completa del DRV8825 quedó en el encabezado de `main.py`. Todo se prueba desde la página.
 
@@ -153,9 +167,8 @@ ESP32 -> Raspberry   E altura=detenido cabeza=extendiendo piernas=contrayendo fi
 | `HOMBRE_MUERTO` | 1.0 s | Sin `/api/mover`, se para el motor |
 | `SESION_HORAS` | 12 h | Una sesión sin uso se borra |
 | `IP_CON_SESION` | 60 min | Portal: una IP con sesión usada en este tiempo recibe "sí hay internet" (dura lo mismo que el reparto de IP) |
-| `LIMITES` | cabeza −30 a 70, piernas 0 a 45 | Solo los usa `/api/paso` |
 
-**Estado (`Camilla`, en memoria):** `sesiones` (token → perfil), `titular`, `solicitud`, `respuestas`, `paro`, `angulos` (siempre 0: nadie usa `/api/paso`), `motor` (una sección a la vez) y `hardware`. Reiniciar el servidor borra todo esto: saca a todos y libera el paro.
+**Estado (`Camilla`, en memoria):** `sesiones` (token → perfil), `titular`, `solicitud`, `respuestas`, `paro`, `motor` (una sección a la vez) y `hardware`. Reiniciar el servidor borra todo esto: saca a todos y libera el paro.
 
 **Reglas:**
 
@@ -168,7 +181,7 @@ ESP32 -> Raspberry   E altura=detenido cabeza=extendiendo piernas=contrayendo fi
 
 | Ruta | Sesión | Qué hace |
 |---|---|---|
-| `GET /api/estado` | Opcional (`X-Sesion`) | `usuario`, `nombre`, `rol`, `control {titular, usuario}`, `paro`, `simulacion`, `hardware {conectado, secciones}`, `solicitud` (solo al titular), `respuesta` (solo a quien pidió, una vez) y `telemetria {cabeza, piernas}` (siempre 0) |
+| `GET /api/estado` | Opcional (`X-Sesion`) | `usuario`, `nombre`, `rol`, `control {titular, usuario}`, `paro`, `simulacion`, `hardware {conectado, secciones, sensores {piernas: {angulo, estado}}}`, `solicitud` (solo al titular), `respuesta` (solo a quien pidió, una vez) y `telemetria {piernas: 12.5}` (solo las secciones con sensor calibrado) |
 | `GET /` y archivos | No | La página compuesta; de `publico/` solo `.css`, `.js` y `.woff2` |
 | `POST /api/login`, `/api/registro` | No | Abre una sesión. El registro crea un fisioterapeuta. `recordar: true` en el login devuelve además una `llave` para el equipo. Un login sin `recordar` anula las llaves de otros equipos del perfil. |
 | `POST /api/reanudar {llave}` | No | Equipo recordado: abre sesión sin contraseña. Vale 30 días desde el último uso. La anulan entrar desde otro equipo, "Salir", una contraseña nueva, desactivar o borrar el perfil. |
@@ -176,7 +189,8 @@ ESP32 -> Raspberry   E altura=detenido cabeza=extendiendo piernas=contrayendo fi
 | `POST /api/logout` | Sí | Cierra la sesión y libera el control si lo tenía |
 | `POST /api/control/tomar`, `solicitar`, `cancelar`, `responder {id, aceptar}`, `liberar` | Sí | Control |
 | `POST /api/mover {seccion, dir, n}`, `/api/detener {seccion, n}` | Sí | Motor continuo. `dir` es 1 o −1. Un `detener` nunca se descarta. |
-| `POST /api/paso {seccion, grados}` | Sí | Cambia `angulos`. Ninguna sección lo usa hoy. |
+| `POST /api/calibrar {seccion, posicion}` | Sí, desarrollador | `plano` o `subido` para el MPU de cabeza o piernas. Rechaza si la sección se mueve o si el sensor está en `falla`. Se anota en el registro. (`/api/paso` se quitó: ninguna sección lo usaba.) |
+| `POST /api/depuracion` | Sí, desarrollador | Modo, puerto del ESP32 y hace cuánto respondió, última orden enviada y última línea `E` recibida, sensores, motor, paro, titular, sesiones (usuario, rol, IP) y las últimas 60 líneas del registro del servidor. Otro rol: 403. |
 | `POST /api/pacientes/lista`, `guardar`, `borrar` | Admin | Registros de pacientes |
 | `POST /api/pacientes/excel {ids}` | Admin | Devuelve un `.xlsx` (`registros-AAAA-MM-DD.xlsx`) con esos registros en ese orden. La página manda los que se ven en la tabla, con la búsqueda aplicada. Lo arma `web/excel.py` solo con la biblioteca estándar (zipfile + XML). DPI y teléfonos van como texto y las fechas como fechas. Se anota cuántos se descargaron, sin datos. |
 | `POST /api/manual {tipo}` | Sí | PDF de `web/manuales/`. Con `usuario` devuelve `manual-usuario.pdf` a cualquiera con sesión; con `tecnico` devuelve `manual-tecnico.pdf` solo a un admin (otro rol: 403). Si falta el archivo avisa "todavía no está disponible". Se lee en cada descarga, así que basta reemplazar el archivo. Lo usa el botón "Manuales" del encabezado (`vistas/manuales.js`). Los PDF se suben al repo. |
@@ -215,7 +229,7 @@ Compone `plantillas/index.html` resolviendo cada `<!-- incluir: ruta -->` en cad
 ## 5. Base de datos: `web/basedatos.py`
 
 - `web/camilla.db`, creada con permiso 600. Está en `.gitignore` porque tiene datos de pacientes y el repositorio es público.
-- **`usuarios`:** `id`, `usuario` (único, sin distinguir mayúsculas), `nombre`, `rol` (`admin` o `fisio`), `activo`, `sal`, `clave` (PBKDF2-HMAC-SHA256, 300 000 vueltas, sal de 16 bytes) y `creado`.
+- **`usuarios`:** `id`, `usuario` (único, sin distinguir mayúsculas), `nombre`, `rol` (`admin` o `fisio`), `activo`, `dev` (0 o 1; columna agregada el 26-11 con `ALTER TABLE` en `iniciar()`), `sal`, `clave` (PBKDF2-HMAC-SHA256, 300 000 vueltas, sal de 16 bytes) y `creado`.
 - **`pacientes`:** todos los campos opcionales, pero hay que llenar al menos uno: nombres, apellidos, sexo (F/M), nacimiento, DPI, carné, teléfono, correo, contacto de emergencia y su teléfono, estatura (m), peso (lb), fisioterapeuta, diagnóstico, dolor (EVA de 0 a 10), próxima cita (`AAAA-MM-DD HH:MM`) y notas, más `creado` y `creado_por`.
 - La única migración es la de `pacientes` de antes del 12-11 (nombre y edad). Una columna nueva no llega sola a una base ya creada.
 - **Reglas** (las aplica el servidor; la página repite las mismas en `ui/formularios.js`, `vistas/acceso.js` y `vistas/pacientes.js`):
@@ -234,12 +248,14 @@ Sin compilación: el servidor junta las plantillas y el navegador carga módulos
 | `estado.js` | Estado compartido (`panel`, `control`, `sesion`) y `puedeMover()` |
 | `recepcion.js` | Aplica cada respuesta de `/api/estado` |
 | `main.js`, `utilidades.js` | Arranque (conecta los módulos) y ayudas (`porId`, `bajarArchivo`...) |
-| `api/cliente.js`, `sondeo.js`, `ordenes.js`, `admin.js` | Peticiones, consulta cada 1 s, órdenes y pedidos de administración |
+| `api/cliente.js`, `sondeo.js`, `ordenes.js`, `admin.js` | Peticiones, consulta cada 300 ms, órdenes y pedidos de administración |
+| `vistas/calibrar.js` | Panel "Calibrar" de cabeza y piernas (solo desarrollador), dentro de la tarjeta porque entre plano y subido hay que mover la sección |
 | `camilla/movimiento.js` | Botón sostenido, estimación, "Ir a" y paro |
 | `camilla/mandos.js` | Eventos de los botones, Esc, Plano y Bloquear |
 | `camilla/telemetria.js` | `aplicarAngulos` y la API `window.camilla` |
 | `ui/pintado.js`, `ui/dibujo.js` | Pantalla y dibujo SVG; nunca mandan órdenes |
 | `ui/modales.js`, `avisos.js`, `formularios.js`, `registro.js` | Modales, toasts, ayudas de formularios y "Registro de comandos (desarrollo)" |
+| `vistas/depuracion.js` | Panel "Depuración (desarrollador)": pregunta `/api/depuracion` cada 1 s mientras está abierto |
 | `vistas/acceso.js`, `sesion.js`, `cesion.js`, `pestanas.js`, `pacientes.js`, `usuarios.js` | Login y registro, entrar y salir, pasar el control, pestañas por rol, pacientes y perfiles |
 | `vistas/manuales.js`, `pin.js`, `pantalla.js` | Botón "Manuales", PIN de Registros y pantalla completa de la tablet |
 
@@ -251,9 +267,10 @@ Sin compilación: el servidor junta las plantillas y el navegador carga módulos
 | `cabeza` | −30° a 70° | 1° | `continua`, `sinTope` |
 | `piernas` | 0° a 45° | 1° | `continua`, `sinTope` |
 
-- `continua`: el motor corre mientras se mantiene el botón (`/api/mover`), y la telemetría del servidor no toca esa sección. Sin `continua`, la sección mandaría un `/api/paso` por grado; no la usa ninguna.
+- `continua`: el motor corre mientras se mantiene el botón (`/api/mover`). Hoy todas las secciones son `continua`.
+- **Con sensor calibrado** (`conSensor` en `estado.js`): el número es el ángulo real que llega en `telemetria`, también mientras se mueve; la página no estima. "Ir a" se deshabilita y "Plano 0°" salta esa sección, porque todavía no mueven motores. Cada tarjeta dice de dónde sale el ángulo: Estimado, Sensor, Sin calibrar, Falta subido, Calibrar de nuevo o Falla del sensor.
 - `sinTope`: la estimación nunca corta el movimiento ni deshabilita el botón al llegar al límite. El motor sigue hasta que se suelta o hasta el tope interno del actuador.
-- Tiempos: `CONSULTA_MS` 1000, `FALLOS_PARA_CAIDA` 3, `MANTENER_MS` 400, `ESPERA_SOLICITUD` 30 y `ESPERA_RESPUESTA` 30. Plazos de las peticiones: 2.5 s para el estado, 8 s para login y registro, 5 s para lo demás.
+- Tiempos: `CONSULTA_MS` 300, `FALLOS_PARA_CAIDA` 3, `MANTENER_MS` 400, `ESPERA_SOLICITUD` 30 y `ESPERA_RESPUESTA` 30. Plazos de las peticiones: 2.5 s para el estado, 8 s para login y registro, 5 s para lo demás.
 
 **Cómo se comporta hoy:**
 
@@ -268,6 +285,10 @@ Sin compilación: el servidor junta las plantillas y el navegador carga módulos
 - **Sin conexión:** tras 3 consultas fallidas seguidas, detiene el movimiento, muestra "Sin conexión con la camilla" y bloquea. Sin ESP32: la cinta "Sin conexión con los motores" y el estado del mismo nombre.
 - **Sesión:** el token va en `sessionStorage`: cada pestaña cuenta como un dispositivo, y recargar no pide entrar otra vez.
 - **Roles:** el fisioterapeuta solo ve Control; el administrador ve Control, Registros y Usuarios.
+- **Desarrollador (rama `mpu-angulos`, 26-11):** es un administrador con `dev = 1`; el servidor y la página lo ven como rol `dev`.
+  - Puede todo lo del admin (`basedatos.ADMINS` y `esAdmin()` en `config.js`).
+  - Es el **único que calibra** los sensores de ángulo y el único que ve, al fondo de Control, "Depuración (desarrollador)" y "Registro de comandos (desarrollo)"; los demás ya no ven el registro.
+  - **Solo se da por terminal:** `python3 web/basedatos.py desarrollador USUARIO`. `admin USUARIO` lo deja como administrador normal. Desde Usuarios no se puede dar ni quitar, y su rol no se puede cambiar ("solo desde la terminal").
 - **Pedido de control:** quien pide ve 30 s de espera; el titular tiene 30 s para decidir y, si no responde, se rechaza solo.
 - **Pantalla completa (`vistas/pantalla.js`):** en un equipo táctil recordado, cada toque (`click`, no `pointerdown`) pide pantalla completa si no la tiene: oculta la barra de Android y la de Chrome. Android la quita al apagarse la pantalla y vuelve con el siguiente toque. La laptop no cambia.
 - `window.camilla` expone `aplicarAngulos`, `estado`, `irA` y `paro` para probar desde la consola del navegador. `topeAltura` y el aviso "En el tope ..." de la altura se quitaron el 24-11: la altura no tiene finales.
@@ -355,7 +376,7 @@ Detener un rato: `sudo systemctl stop camilla-pagina camilla-red` (al reiniciar 
 - Elegido: **MPU6050 (GY-521)** debajo de la sección de piernas (cualquier parte que gire con ella), por I2C en 21 y 22. Mide contra la gravedad y no se gasta.
   - **Prueba del 26-11:** primer GY-521 en la mesa, desde la PC por COM4. Dio `[104]` y WHO_AM_I `0x68` (original), con 40 lecturas sin error que siguen la inclinación. La gravedad mide entre 15 200 y 16 100 (1 g = 16 384).
   - **Montaje:** parado, atornillado a un soporte impreso que cuelga de la sección de piernas (tubo negro que sube con los actuadores). Con X vertical, la bisagra queda paralela a Y o a Z según cómo se gire el soporte.
-  - **Calibración prevista:** dos posiciones desde la página (plano y subido unos 30°), solo para admin. El ESP32 calcula el eje de la bisagra y guarda la calibración en un archivo propio. Se trabaja en la rama `mpu-angulos`.
+  - **Calibración:** dos posiciones desde la página (plano y subido unos 30°), solo el perfil Desarrollador. El ESP32 calcula el eje de la bisagra y guarda la calibración en `calibracion.json`. Código en la rama `mpu-angulos` (sección 3), sin probar en la camilla.
 - Si tiene que ir en la bisagra: **potenciómetro RV09** (9 mm) con su eje en un tapón impreso dentro del tubo y el cuerpo fijo al asiento. Dura unos 10 000 a 15 000 ciclos; uno de plástico conductivo (Bourns 3382 o similar) dura mucho más. Va a 34, 36 o 39.
 
 **Definitivo (aprobado):** un MD-BTS7960 (43 A, 5.5 a 25 V) por sección, con los dos actuadores en paralelo.
@@ -395,7 +416,7 @@ Detener un rato: `sudo systemctl stop camilla-pagina camilla-red` (al reiniciar 
 6. Con `sinTope` y sin sensores, nada impide que un actuador empuje contra la estructura si se mantiene el botón: solo lo frena su tope interno. Piernas ya tiene finales en el código (falta montarlos en 17 y 16); cabeza no, y la altura no los va a tener: el husillo sigue hasta su extremo.
 7. No hay tiempo máximo de marcha por sección.
 
-**Lo que la pantalla muestra y no es cierto:** grados y barra de altura estimados; "Ir a" y "Plano 0°", que no mueven nada pero dicen "Ajustando a ..."; "Un toque = 1°" y `+1°`/`−1°`. Cada pantalla tiene su propia estimación.
+**Lo que la pantalla muestra y no es cierto:** grados sin sensor calibrado y barra de altura estimados; "Ir a" y "Plano 0°", que no mueven nada pero dicen "Ajustando a ..."; "Un toque = 1°" y `+1°`/`−1°`. Cada pantalla tiene su propia estimación.
 
 **Hardware y conexión:**
 
@@ -421,7 +442,7 @@ Detener un rato: `sudo systemctl stop camilla-pagina camilla-red` (al reiniciar 
 **Decisiones del usuario:**
 
 1. **Pantalla sin sensores:** seguir con grados estimados, pasar a SUBIENDO / BAJANDO / EN REPOSO, o poner sensores. En cualquier caso hay que decidir qué pasa con "Ir a", "Plano 0°" y los textos de 1°.
-2. **Sensor de ángulo de piernas:** decidido el MPU6050 bajo la sección (sección 8); falta el código (rama `mpu-angulos`). El AS5600 no cabe en la bisagra. Historia: el 11-11 se pensó en un encoder óptico en código Gray (rama `backup-cambios-esp32`) y el 20-11 en dos AS5600 (rama `manuales`); análisis viejo en `git show 1eaf7a2:CONTEXTO.md`.
+2. **Sensor de ángulo de piernas:** decidido el MPU6050 bajo la sección (sección 8); código en la rama `mpu-angulos`, falta probarlo en la camilla. El AS5600 no cabe en la bisagra. Historia: el 11-11 se pensó en un encoder óptico en código Gray (rama `backup-cambios-esp32`) y el 20-11 en dos AS5600 (rama `manuales`); análisis viejo en `git show 1eaf7a2:CONTEXTO.md`.
 3. **Perfiles:** registro abierto o que los cree el administrador.
 4. **Registro de uso:** solo cuentas y pacientes, o también un historial de quién movió la camilla y cuándo.
 5. **Altura:** qué husillo lleva (mm por vuelta) y si el NEMA 17 aguanta la camilla con una persona. Como no lleva finales, el husillo tiene que aguantar llegar a su extremo, o hay que soltar a tiempo. Si no, NEMA 23 con reductor o actuador lineal con BTS7960. Si el husillo no es autobloqueante (paso largo, como T8×8), la camilla baja sola al cortar la energía: hace falta husillo de paso fino, freno o reductor.
@@ -465,6 +486,7 @@ Detener un rato: `sudo systemctl stop camilla-pagina camilla-red` (al reiniciar 
 python web/servidor.py                   # con ESP32 por USB
 python web/servidor.py --simulador       # sin placa; las 3 secciones simuladas
 python web/basedatos.py admin USUARIO    # primer admin, después de crear el perfil en la página
+python web/basedatos.py desarrollador USUARIO   # perfil Desarrollador: admin + depuración + calibrar (rama mpu-angulos)
 python web/datos_prueba.py               # 20 pacientes inventados (quitarlos: python web/datos_prueba.py borrar)
 ```
 
@@ -615,8 +637,9 @@ Privadas de la cuenta del usuario. Algunas muestran planes viejos (por ejemplo, 
 
 - `esp32/main.py` decide qué secciones existen: las informa en cada línea `E`, y la página muestra "Sin actuador" para las que falten.
 - `hardware.py` guarda una sola orden y el servidor un solo `motor`: hoy no se pueden mover dos secciones a la vez.
-- `aplicarAngulos` (`camilla/telemetria.js`) ignora las secciones `continua`. Si llegan ángulos reales, hay que cambiar esa condición y la de `darPaso` (`if (!c.continua)`).
-- `LIMITES` (`servidor.py`) y `CONFIG` (`config.js`) se cambian juntos, igual que las reglas de `basedatos.py`, `ui/formularios.js`, `vistas/acceso.js` y `vistas/pacientes.js`.
+- El ángulo real llega en `telemetria` y `aplicarAngulos` lo aplica siempre; `darPaso` no estima una sección con sensor. El estado de cada sensor viene aparte, en `hardware.sensores`, y no se compara con el resto de `hardware` (si no, el registro anotaría cada lectura).
+- El Simulador (`--simulador`) también simula los sensores de cabeza y piernas, calibrados: 3°/s y 4°/s mientras se mueven, con su calibración.
+- `CONFIG` (`config.js`) se cambia junto con igual que las reglas de `basedatos.py`, `ui/formularios.js`, `vistas/acceso.js` y `vistas/pacientes.js`.
 - `CONFIG.altura.numerica = true` rompe la página con un `TypeError`: la altura no tiene esos elementos en el HTML.
 - Si se deshabilita un botón mientras se mantiene pulsado, puede no llegar el `pointerup`. Por eso existe `sinTope`.
 - Una orden `detener` nunca se descarta, aunque su número sea viejo.

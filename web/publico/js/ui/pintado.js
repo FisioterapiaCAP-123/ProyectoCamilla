@@ -1,6 +1,6 @@
 /* Lleva el estado a la pantalla. Solo lee estado.js: nunca manda ordenes. */
 import { CONFIG, SECCIONES, SECCIONES_NUMERICAS, SUFIJO } from '../config.js';
-import { control, estaMoviendo, panel, puedeMover } from '../estado.js';
+import { conSensor, control, estaMoviendo, panel, puedeMover, sesion } from '../estado.js';
 import { conSigno, porId } from '../utilidades.js';
 import { pintarDibujo } from './dibujo.js';
 
@@ -29,7 +29,7 @@ function pintarRiel(seccion) {
   const c = CONFIG[seccion];
   const rango = c.max - c.min;
   const suf = SUFIJO[seccion];
-  const pct = (panel.valor[seccion] - c.min) / rango * 100;
+  const pct = (Math.min(c.max, Math.max(c.min, panel.valor[seccion])) - c.min) / rango * 100;
   const ref = (c.ref - c.min) / rango * 100;
   const relleno = porId('relleno' + suf);
   relleno.style.left  = Math.min(pct, ref) + '%';
@@ -54,6 +54,46 @@ function pintarSeccion(seccion) {
   if (seccion === 'altura') return;   // sin sensor ni finales: no hay numero que mostrar
   porId('val' + suf).textContent = conSigno(valor[seccion]);
   porId('obj' + suf).textContent = (destino && destino[seccion] !== null) ? conSigno(destino[seccion]) + '°' : '—';
+  pintarSensor(seccion);
+}
+
+/* De donde sale el angulo, y el panel de calibrar (solo el perfil Desarrollador) */
+const SENSOR = {
+  ok:     ['Sensor', 'text-bg-success'],
+  sincal: ['Sin calibrar', 'text-bg-warning'],
+  plano:  ['Falta subido', 'text-bg-warning'],
+  poco:   ['Calibrar de nuevo', 'text-bg-warning'],
+  falla:  ['Falla del sensor', 'text-bg-danger']
+};
+const PASO_CALIBRAR = {
+  sincal: 'Sin calibrar. Paso 1: la sección en plano y Guardar plano.',
+  plano:  'Plano guardado. Paso 2: sube la sección unos 30° y toca Guardar subido.',
+  poco:   'Quedó muy cerca de plano: sube más (al menos 15°) y toca Guardar subido otra vez.',
+  falla:  'El sensor no responde: revisa sus cables. Mientras tanto el ángulo es estimado.'
+};
+
+function pintarSensor(seccion) {
+  const suf = SUFIJO[seccion];
+  const sensor = panel.sensores[seccion];
+  const [texto, tono] = sensor ? SENSOR[sensor.estado] || SENSOR.falla : ['Estimado', 'text-bg-light'];
+  const badge = porId('sensor' + suf);
+  if (badge.textContent !== texto) badge.textContent = texto;
+  badge.className = 'badge tipo-dato text-uppercase ms-auto ' + tono;
+
+  const puede = sesion.rol === 'dev' && Boolean(sensor);
+  if (!puede && panel.calibrando === seccion) panel.calibrando = null;
+  porId('btnCalibrar' + suf).classList.toggle('d-none', !puede || panel.calibrando === seccion);
+  const caja = porId('calibrar' + suf);
+  caja.classList.toggle('d-none', panel.calibrando !== seccion);
+  if (panel.calibrando !== seccion) return;
+  const estado = sensor.estado;
+  porId('calEstado' + suf).textContent = estado === 'ok'
+    ? `Calibrado: ahora marca ${conSigno(Math.round(sensor.angulo))}°. Compruébalo con el nivel del celular.`
+    : PASO_CALIBRAR[estado] || PASO_CALIBRAR.falla;
+  const quieta = !estaMoviendo(seccion);
+  const listo = control.conectado && panel.hardware.conectado && estado !== 'falla' && quieta;
+  caja.querySelector('[data-posicion="plano"]').disabled = !listo;
+  caja.querySelector('[data-posicion="subido"]').disabled = !listo || estado === 'sincal';
 }
 
 function pintarEstado() {
@@ -83,8 +123,9 @@ function pintarBotones() {
     boton.classList.toggle('presionado', Boolean(manual && manual.seccion === seccion && manual.dir === dir));
   });
   SECCIONES_NUMERICAS.forEach((seccion) => {
-    porId('ir' + SUFIJO[seccion]).disabled = !puedeMover(seccion);
-    porId('campo' + SUFIJO[seccion]).disabled = !puedeMover(seccion);
+    /* "Ir a" no mueve motores: con sensor real no se ofrece */
+    porId('ir' + SUFIJO[seccion]).disabled = !puedeMover(seccion) || conSensor(seccion);
+    porId('campo' + SUFIJO[seccion]).disabled = !puedeMover(seccion) || conSensor(seccion);
   });
   el.btnPlano.disabled = !habilitado;
   /* Bloquear es una accion de quien opera; sin el control no tiene sentido.

@@ -11,8 +11,11 @@ export const panel = {
   pestana: 'control',
   modalActivo: null,
   hardware: { conectado: true, secciones: ['altura', 'cabeza', 'piernas'] },   // lo actualiza el servidor
-  ultimaOrden: 0,    // la posicion que llega del servidor se ignora un momento tras mover
-  paroPedidoEn: 0     // y el paro, un momento tras pulsarlo, para que no parpadee
+  /* Sensores de angulo (MPU6050) que informa el ESP32: {piernas: {angulo: 12.5|null,
+     estado: 'ok'|'falla'|'sincal'|'plano'|'poco'}}. Sin entrada = esa seccion no tiene sensor. */
+  sensores: {},
+  calibrando: null,  // seccion con el panel de calibrar abierto (solo perfil Desarrollador)
+  paroPedidoEn: 0     // lo que diga el servidor del paro se ignora un momento tras pulsarlo, para que no parpadee
 };
 
 /* Quien esta operando la camilla ahora mismo. Lo dicta el servidor. */
@@ -25,6 +28,12 @@ export const sesion = { usuario: null, nombre: null, rol: null, token: '', regis
 export function puedeMover(seccion) {
   if (panel.paro || panel.bloqueo || !control.soyYo || !control.conectado || !panel.hardware.conectado) return false;
   return seccion === undefined || panel.hardware.secciones.includes(seccion);
+}
+
+/* Con sensor calibrado el angulo es real: la pagina no lo estima. */
+export function conSensor(seccion) {
+  const s = panel.sensores[seccion];
+  return Boolean(s && s.estado === 'ok');
 }
 
 export function estaMoviendo(seccion) {

@@ -1,16 +1,17 @@
-/* Entrada de datos: pregunta GET /api/estado cada segundo.
+/* Entrada de datos: pregunta GET /api/estado cada CONSULTA_MS (config.js).
 
    Es el unico modulo que sabe COMO llegan los datos del servidor. Quien los
    usa solo entrega sus tres funciones a iniciarSondeo().
 
    GET /api/estado responde:
      { usuario:"usuario1"|null,         null si la sesion ya no existe
-       nombre:"Persona", rol:"admin"|"fisio",
+       nombre:"Persona", rol:"admin"|"fisio"|"dev",
        control:{titular:"Persona"|null, usuario:"usuario1"|null},
        paro:false, simulacion:true,
        solicitud:{id, usuario}|null,    solo le llega al titular
        respuesta:{aceptada, usuario}|null,   solo al que pidio, una vez
-       telemetria:{cabeza:32, piernas:14} } */
+       hardware:{conectado, secciones:[...], sensores:{piernas:{angulo:12.5|null, estado:"ok"|"falla"|"sincal"|"plano"|"poco"}}},
+       telemetria:{piernas:12.5} }       angulo real de las secciones con sensor calibrado */
 import { CONSULTA_MS, FALLOS_PARA_CAIDA } from '../config.js';
 import { sesion } from '../estado.js';
 import { registrar } from '../ui/registro.js';

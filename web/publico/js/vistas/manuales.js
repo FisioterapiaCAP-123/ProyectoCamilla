@@ -1,6 +1,7 @@
 /* Boton "Manuales" del encabezado: baja el manual de usuario (todos) o el tecnico (solo administrador).
    Los PDF estan en web/manuales/ y los entrega POST /api/manual con la sesion. */
 import { descargar } from '../api/cliente.js';
+import { esAdmin } from '../config.js';
 import { sesion } from '../estado.js';
 import { mostrarAviso, revisar } from '../ui/avisos.js';
 import { abrirModal, cerrarModal } from '../ui/modales.js';
@@ -9,7 +10,7 @@ import { bajarArchivo, porId } from '../utilidades.js';
 const NOMBRES = { usuario: 'Manual de usuario', tecnico: 'Manual técnico' };
 
 function abrirManuales() {
-  porId('manualTecnico').hidden = sesion.rol !== 'admin';   // el servidor tambien lo revisa
+  porId('manualTecnico').hidden = !esAdmin(sesion.rol);   // el servidor tambien lo revisa
   abrirModal('modalManuales');
 }
 

@@ -5,12 +5,17 @@ Cada persona crea su perfil en la pagina (usuario + contrasena) y entra como
 fisioterapeuta. Solo un administrador ve los registros de pacientes y maneja
 los perfiles. El primer administrador se nombra desde la terminal.
 
+El perfil Desarrollador es un administrador con la marca `dev`: ademas ve la
+depuracion y es el unico que calibra los sensores de angulo. Solo se da desde la
+terminal; desde la pagina no se puede dar ni quitar.
+
 camilla.db queda al lado de este archivo y NO se sube a git (esta en
 .gitignore): tiene datos de pacientes y el repo es publico.
 
 Uso:
   python3 basedatos.py                  lista los perfiles
-  python3 basedatos.py admin USUARIO    le da el rol de administrador
+  python3 basedatos.py admin USUARIO    le da el rol de administrador (y le quita el de desarrollador)
+  python3 basedatos.py desarrollador USUARIO   le da el rol de desarrollador (administrador + depuracion)
   python3 basedatos.py clave USUARIO    le pone una contrasena nueva
 """
 import getpass
@@ -29,7 +34,9 @@ import reloj
 
 ARCHIVO = Path(__file__).parent / "camilla.db"
 VUELTAS = 300_000  # PBKDF2: ~0.4 s en la Raspberry, frena a quien intente adivinar
-ROLES = {"admin": "Administrador", "fisio": "Fisioterapeuta"}
+ROLES = {"admin": "Administrador", "fisio": "Fisioterapeuta"}  # los que se pueden dar desde la pagina
+NOMBRES_ROL = dict(ROLES, dev="Desarrollador")  # "dev" = admin con la marca dev (solo por terminal)
+ADMINS = ("admin", "dev")  # roles que ven Registros y Usuarios
 CLAVE_MINIMA = 6
 EDAD_MAXIMA = 120  # anos: limita la fecha de nacimiento
 
@@ -52,6 +59,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
     nombre  TEXT NOT NULL,
     rol     TEXT NOT NULL DEFAULT 'fisio' CHECK (rol IN ('admin', 'fisio')),
     activo  INTEGER NOT NULL DEFAULT 1,
+    dev     INTEGER NOT NULL DEFAULT 0,
     sal     TEXT NOT NULL,
     clave   TEXT NOT NULL,
     creado  TEXT NOT NULL
@@ -118,6 +126,9 @@ def iniciar():
         for columna in ("pin", "pin_sal"):
             if columna not in columnas:
                 con.execute(f"ALTER TABLE llaves ADD COLUMN {columna} TEXT")
+    with closing(abrir()) as con, con:  # perfiles de antes del rol Desarrollador (26-11)
+        if "dev" not in {c["name"] for c in con.execute("PRAGMA table_info(usuarios)")}:
+            con.execute("ALTER TABLE usuarios ADD COLUMN dev INTEGER NOT NULL DEFAULT 0")
 
 
 def migrar_pacientes(con):
@@ -172,9 +183,10 @@ def leer_fecha(texto, formato):
 
 
 def publico(fila):
-    """Lo que se puede mostrar de un perfil (sin la contrasena)."""
+    """Lo que se puede mostrar de un perfil (sin la contrasena). rol: "admin", "fisio" o "dev"."""
+    rol = "dev" if fila["rol"] == "admin" and fila["dev"] else fila["rol"]
     return {"id": fila["id"], "usuario": fila["usuario"], "nombre": fila["nombre"],
-            "rol": fila["rol"], "activo": bool(fila["activo"]), "creado": fila["creado"]}
+            "rol": rol, "activo": bool(fila["activo"]), "creado": fila["creado"]}
 
 
 # ---------- perfiles ----------
@@ -417,19 +429,21 @@ if __name__ == "__main__":
     orden = sys.argv[1:]
     if not orden:
         for u in usuarios():
-            print(f"  {u['usuario']:<20} {ROLES[u['rol']]:<15} {'activo' if u['activo'] else 'desactivado':<12} {u['nombre']}")
+            print(f"  {u['usuario']:<20} {NOMBRES_ROL[u['rol']]:<15} {'activo' if u['activo'] else 'desactivado':<12} {u['nombre']}")
         if not hay_admin():
             print("No hay administrador. Crea tu perfil en la pagina y luego:  python3 web/basedatos.py admin TU_USUARIO")
     elif orden[0] == "revisar":  # lo usa encender_red.sh: solo avisa si falta el administrador
         if not hay_admin():
             print("Aviso: no hay administrador. Crea tu perfil en la pagina y luego:  python3 web/basedatos.py admin TU_USUARIO")
-    elif len(orden) == 2 and orden[0] in ("admin", "clave"):
+    elif len(orden) == 2 and orden[0] in ("admin", "desarrollador", "clave"):
         fila = buscar_por_usuario(orden[1])
         if fila is None:
             sys.exit(f"No existe el usuario {orden[1]!r}. Primero se crea el perfil en la pagina.")
-        if orden[0] == "admin":
-            cambiar_usuario(fila["id"], rol="admin", activo=1)
-            print(f"{fila['usuario']} ahora es administrador. Si tenia la pagina abierta, que salga y vuelva a entrar.")
+        if orden[0] in ("admin", "desarrollador"):
+            dev = int(orden[0] == "desarrollador")
+            cambiar_usuario(fila["id"], rol="admin", dev=dev, activo=1)
+            print(f"{fila['usuario']} ahora es {'desarrollador' if dev else 'administrador'}. "
+                  "Si tenia la pagina abierta, que salga y vuelva a entrar.")
         else:
             clave = getpass.getpass("Contraseña nueva: ")
             if error := revisar_clave(clave):

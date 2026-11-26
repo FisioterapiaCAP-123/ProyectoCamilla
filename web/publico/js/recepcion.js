@@ -14,7 +14,7 @@ import { actualizarRegistros } from './vistas/pin.js';
 import { avisoLogin } from './vistas/acceso.js';
 import { entrarAlPanel, reanudarEquipo, sesionTerminada } from './vistas/sesion.js';
 
-const ECO_MS = 1500;   // tras una orden propia se ignora lo que diga el servidor, que aun no la refleja
+const ECO_MS = 1500;   // tras pulsar el paro se ignora lo que diga el servidor, que aun no lo refleja
 
 const vistaPanel = porId('vistaPanel');
 
@@ -49,10 +49,14 @@ export function recibir(e) {
   if (vistaPanel.hidden) return;
 
   // Si el ESP32 se desconecta, el panel lo muestra y deja de permitir el movimiento
-  if (e.hardware && JSON.stringify(e.hardware) !== JSON.stringify(panel.hardware)) {
-    panel.hardware = e.hardware;
-    registrar('← motores: ' + (e.hardware.conectado ? e.hardware.secciones.join(', ') : 'sin conexión'));
-    pintar();
+  if (e.hardware) {
+    const equipo = { conectado: e.hardware.conectado, secciones: e.hardware.secciones };
+    if (JSON.stringify(equipo) !== JSON.stringify(panel.hardware)) {
+      panel.hardware = equipo;
+      registrar('← motores: ' + (equipo.conectado ? equipo.secciones.join(', ') : 'sin conexión'));
+      pintar();
+    }
+    recibirSensores(e.hardware.sensores || {});
   }
 
   // El administrador puede cambiar el rol mientras la pagina esta abierta
@@ -75,10 +79,23 @@ export function recibir(e) {
   atenderSolicitud(e.solicitud);
   if (e.respuesta) resolverSolicitud(e.respuesta);
 
-  // Mientras yo muevo manda lo que se ve en mi pantalla
-  if (e.telemetria && !panel.manual && !panel.destino && Date.now() - panel.ultimaOrden > ECO_MS) {
-    aplicarAngulos(e.telemetria);
-  }
+  // Angulo real de las secciones con sensor: siempre, tambien mientras se mueven
+  if (e.telemetria) aplicarAngulos(e.telemetria);
+}
+
+/* El estado de cada sensor (no el angulo, que cambia todo el tiempo) va al registro */
+function recibirSensores(sensores) {
+  let cambio = false;
+  ['cabeza', 'piernas'].forEach((s) => {
+    const antes = panel.sensores[s] ? panel.sensores[s].estado : 'sin sensor';
+    const ahora = sensores[s] ? sensores[s].estado : 'sin sensor';
+    if (antes !== ahora) {
+      registrar('← sensor de ' + s + ': ' + ahora);
+      cambio = true;
+    }
+  });
+  panel.sensores = sensores;
+  if (cambio) pintar();
 }
 
 export function reconectado() {

@@ -1,7 +1,7 @@
 /* Pestanas del panel y lo que cada rol puede ver.
    Para agregar una: su parcial e incluir en plantillas/panel/, su boton en
    pestanas.html y una entrada en PESTANAS. */
-import { ROLES } from '../config.js';
+import { ROLES, esAdmin } from '../config.js';
 import { detenerTodo } from '../camilla/movimiento.js';
 import { panel, sesion } from '../estado.js';
 import { pintarParoFlotante } from '../ui/pintado.js';
@@ -36,8 +36,9 @@ function mostrarPestana(cual) {
 export function aplicarRol(rol) {
   sesion.rol = rol || null;
   porId('perfilRol').textContent = ROLES[rol] || '';
-  navegacion.hidden = rol !== 'admin';
-  if (rol !== 'admin' && panel.pestana !== 'control') mostrarPestana('control');
+  navegacion.hidden = !esAdmin(rol);
+  porId('bloqueDesarrollo').hidden = rol !== 'dev';   // depuracion y registro de comandos
+  if (!esAdmin(rol) && panel.pestana !== 'control') mostrarPestana('control');
 }
 
 export function iniciarPestanas() {

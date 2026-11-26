@@ -43,17 +43,10 @@ export const SERVIDOR = {
   // pagina cerrada) el servidor para el motor solo en 1 s.
   mover(seccion, dir) {
     clearInterval(mantenerId);
-    panel.ultimaOrden = Date.now();
     enviar('/api/mover', numerada({ seccion, dir }));
     mantenerId = setInterval(() => {
-      panel.ultimaOrden = Date.now();
       llamar('/api/mover', numerada({ seccion, dir })).catch(() => {});
     }, MANTENER_MS);
-  },
-  // POST /api/paso {seccion, grados}       un grado exacto
-  paso(seccion, dir) {
-    panel.ultimaOrden = Date.now();
-    enviar('/api/paso', { seccion, grados: dir });
   },
   // POST /api/detener {seccion}
   detener(seccion) {
@@ -78,5 +71,9 @@ export const SERVIDOR = {
     return enviarControl('/api/control/responder', { id: solicitud ? solicitud.id : null, aceptar: Boolean(aceptar) });
   },
   // POST /api/control/liberar
-  liberarControl() { return enviarControl('/api/control/liberar'); }
+  liberarControl() { return enviarControl('/api/control/liberar'); },
+
+  // POST /api/calibrar {seccion, posicion:"plano"|"subido"}   solo perfil Desarrollador, con la seccion quieta
+  //   -> {ok:true} o {ok:false, mensaje:"..."}; el resultado se ve en hardware.sensores
+  calibrar(seccion, posicion) { return enviarControl('/api/calibrar', { seccion, posicion }); }
 };
