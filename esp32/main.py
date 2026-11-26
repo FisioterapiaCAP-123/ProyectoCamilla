@@ -22,8 +22,9 @@ Corriente del driver = Vref x 2 (Vref entre el potenciometro y GND).
 La altura no tiene finales de carrera: se mueve solo mientras se mantiene el boton.
 Nunca conectar o desconectar el motor con la fuente encendida: se quema el driver.
 
-Pines de la placa propia (25-11): EN de la altura en el 26 y extender piernas en
-el 13 (antes 13 y 26). Con la protoboard vieja hay que cambiar esos dos cables.
+Pines de la placa propia (25-11 y 26-11): EN de la altura en el 26 y extender piernas
+en el 13 (antes 13 y 26); cabeza extender en el 22 y retraer en el 23 (antes 18 y 19).
+Con la protoboard vieja hay que cambiar esos cables.
 
 Finales de carrera de piernas: contacto NC del microswitch entre el GPIO y GND
 (C y NC; sin resistencia, se usa la interna). GPIO 17 = arriba (al extender),
@@ -31,8 +32,9 @@ GPIO 16 = abajo (al retraer). Con un final tocado no se mueve hacia ese lado, si
 se puede hacia el otro. Un cable cortado se lee como tocado: tambien para.
 
 Angulo real de piernas y cabeza: un MPU6050 (modulo GY-521) debajo de cada seccion,
-los dos en el mismo I2C (SDA 21, SCL 22). Piernas con AD0 a GND (0x68), cabeza con
-AD0 a VCC (0x69). Se calibra desde la pagina con la seccion quieta: primero "plano"
+cada uno con su propio I2C (el ESP32 tiene dos): piernas SCL 21 y SDA 19 (J7 de la
+placa), cabeza SCL 5 y SDA 18 (J8). Los dos con AD0 a GND (direccion 0x68). Cada bus
+tiene su frecuencia, y si un cable falla el otro sensor sigue leyendo. Se calibra desde la pagina con la seccion quieta: primero "plano"
 (a 0 grados) y despues "subido" (unos 30 grados). Con esas dos lecturas el ESP32 sabe
 alrededor de que eje gira la seccion, asi que no importa como quedo montado el modulo.
 La calibracion queda en calibracion.json, en la memoria del ESP32.
@@ -76,8 +78,8 @@ PIERNAS_FINAL_ARRIBA = 17   # piernas: final de carrera al extender (subir); Non
 PIERNAS_FINAL_ABAJO = 16    # piernas: final de carrera al retraer (bajar); None si no esta conectado
 FINAL_ACTIVO = 1            # lo que lee el pin con el final TOCADO: 1 = contacto NC a GND (si se corta
                             #   el cable tambien para); 0 = contacto NO a GND
-CABEZA_EXTENDER = 18        # cabeza, L298N: IN1 (ENA con su jumper)
-CABEZA_RETRAER = 19         # cabeza, L298N: IN2
+CABEZA_EXTENDER = 22        # cabeza: RPWM del BTS7960 (placa J6) o IN1 del L298N (antes 18)
+CABEZA_RETRAER = 23         # cabeza: LPWM del BTS7960 (placa J6) o IN2 del L298N (antes 19)
 VELOCIDAD = 100             # puente H: potencia en % (0 a 100)
 FRECUENCIA_PWM = 1000       # puente H: Hz
 ALTURA_STEPPER = True       # altura con motor paso a paso; False si no esta conectado
@@ -91,10 +93,13 @@ PASOS_INICIO = 250          # altura: a esta velocidad arranca; mas rapido de go
 PASOS_ACELERACION = 1500    # altura: cuanto sube la velocidad cada segundo (llega al maximo en 0.5 s)
 MANTENER_FUERZA = True      # altura: detenido, el motor sigue sujetando (se calienta)
 PIERNAS_MPU = 0x68          # piernas: direccion de su MPU6050 (AD0 a GND); None si no esta conectado
-CABEZA_MPU = None           # cabeza: 0x69 (AD0 a VCC) cuando se conecte; None si no esta conectado
-MPU_SDA = 21                # MPU6050: los dos modulos comparten SDA y SCL
-MPU_SCL = 22
-MPU_FRECUENCIA = 50000      # MPU6050: Hz del I2C; si falla con cables largos, 20000
+PIERNAS_SCL = 21            # piernas: su propio I2C (placa J7)
+PIERNAS_SDA = 19
+PIERNAS_I2C_HZ = 50000      # piernas: velocidad del I2C; si falla con el cable puesto, 20000
+CABEZA_MPU = None           # cabeza: 0x68 (AD0 a GND) cuando se conecte; None si no esta conectado
+CABEZA_SCL = 5              # cabeza: su propio I2C (placa J8)
+CABEZA_SDA = 18
+CABEZA_I2C_HZ = 20000       # cabeza: cable de unos 2 m, mas lento aguanta mejor el ruido
 MPU_CADA_MS = 100           # MPU6050: cada cuanto se lee cada modulo
 MPU_SUAVIZADO = 0.3         # MPU6050: cuanto pesa cada lectura nueva (0 a 1; menos = mas suave y mas lento)
 CALIBRACION_MINIMA = 15     # MPU6050: grados que "subido" tiene que quedar lejos de "plano"
@@ -411,18 +416,19 @@ else:
         except Exception as error:      # sin altura, cabeza y piernas siguen funcionando
             print("# altura desactivada:", error)
 
-# Un MPU6050 por seccion, todos en el mismo I2C. Si falla, los motores siguen igual.
+# Un MPU6050 por seccion, cada uno en su propio I2C (el ESP32 tiene dos: 0 y 1) y con
+# su velocidad. Si uno falla, el otro sensor y los motores siguen igual.
 SENSORES = {}
-_mpu = {nombre: direccion for nombre, direccion in (("piernas", PIERNAS_MPU), ("cabeza", CABEZA_MPU))
-        if direccion is not None and nombre in SECCIONES}
-if _mpu:
+_mpu = [m for m in (("piernas", PIERNAS_MPU, PIERNAS_SCL, PIERNAS_SDA, PIERNAS_I2C_HZ),
+                    ("cabeza", CABEZA_MPU, CABEZA_SCL, CABEZA_SDA, CABEZA_I2C_HZ))
+        if m[1] is not None and m[0] in SECCIONES]
+_guardada = leer_calibracion() if _mpu else {}
+for _id, (_nombre, _direccion, _scl, _sda, _hz) in enumerate(_mpu):
     try:
-        _bus = I2C(0, scl=Pin(MPU_SCL), sda=Pin(MPU_SDA), freq=MPU_FRECUENCIA)
-        _guardada = leer_calibracion()
-        for _nombre, _direccion in _mpu.items():
-            SENSORES[_nombre] = Inclinometro(_bus, _direccion, _guardada.get(_nombre, {}))
+        _bus = I2C(_id, scl=Pin(_scl), sda=Pin(_sda), freq=_hz)
+        SENSORES[_nombre] = Inclinometro(_bus, _direccion, _guardada.get(_nombre, {}))
     except Exception as error:
-        print("# sensores desactivados:", error)
+        print("# sensor de %s desactivado: %s" % (_nombre, error))
 
 
 def guardar_calibracion():
