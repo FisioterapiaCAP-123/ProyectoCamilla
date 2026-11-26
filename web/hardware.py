@@ -6,6 +6,8 @@ Esp32Serial: habla con esp32/main.py por USB.
 
 estado()["sensores"]: {"piernas": {"angulo": 12.5 o None, "estado": "ok"|"falla"|"sincal"|"plano"|"poco"}},
 solo de las secciones con sensor de angulo (MPU6050).
+estado()["altura"]: {"pasos": 120, "centro": True, "topes": {"abajo": -4000|None, "arriba": 3800|None},
+"modo": "auto"|"manual"}, o None si el ESP32 no informa pasos (main.py viejo o sin stepper).
 
 Ningun metodo espera al puerto: mover() y parar() solo dejan la orden lista y un
 hilo propio la envia, porque se llaman con `candado` tomado.
@@ -38,11 +40,16 @@ class Simulador:
     RANGO = {"cabeza": (-30.0, 70.0), "piernas": (0.0, 45.0)}
     CALIBRACION_MINIMA = 15  # grados, igual que en esp32/main.py
 
+    PASOS_POR_SEGUNDO = 800  # altura: un poco menos que los 1000 del ESP32, por la rampa
+    PASOS_FISICOS = (-5000, 5000)  # donde se trabaria la altura simulada
+
     def __init__(self):
         self.real = {s: 0.0 for s in self.RANGO}  # angulo "fisico" de cada seccion
         self.cero = {s: 0.0 for s in self.RANGO}  # donde se guardo "plano"
         self.calibrado = {s: "ok" for s in self.RANGO}
         self.marcha = None  # (seccion, direccion, desde)
+        # altura con centro y topes ya puestos, como quedaria tras calibrarla
+        self.altura = {"pasos": 0.0, "centro": True, "topes": {"abajo": -4000, "arriba": 4000}, "manual": False}
 
     def iniciar(self):
         pass
@@ -59,6 +66,13 @@ class Simulador:
             minimo, maximo = self.RANGO[seccion]
             cambio = direccion * self.GRADOS_POR_SEGUNDO[seccion] * (ahora - desde)
             self.real[seccion] = max(minimo, min(maximo, self.real[seccion] + cambio))
+        elif seccion == "altura" and not self.altura["manual"]:
+            a = self.altura
+            minimo, maximo = self.PASOS_FISICOS
+            if a["centro"]:  # como el ESP32: no pasa de los topes
+                minimo = a["topes"]["abajo"] if a["topes"]["abajo"] is not None else minimo
+                maximo = a["topes"]["arriba"] if a["topes"]["arriba"] is not None else maximo
+            a["pasos"] = max(minimo, min(maximo, a["pasos"] + direccion * self.PASOS_POR_SEGUNDO * (ahora - desde)))
         self.marcha = (seccion, direccion, ahora)
 
     def mover(self, seccion, direccion):
@@ -79,6 +93,30 @@ class Simulador:
             lejos = abs(self.real[seccion] - self.cero[seccion]) >= self.CALIBRACION_MINIMA
             self.calibrado[seccion] = "ok" if lejos else "poco"
 
+    def ajustar_altura(self, accion):
+        """Igual que ajustar_altura() de esp32/main.py."""
+        self.avanzar()
+        a = self.altura
+        moviendo = bool(self.marcha and self.marcha[0] == "altura")
+        if accion == "manual":
+            if moviendo:
+                self.marcha = None
+            a["manual"], a["centro"] = True, False
+        elif moviendo:
+            return
+        elif accion == "auto":
+            a["manual"] = False
+        elif a["manual"]:
+            return
+        elif accion == "centro":
+            a["pasos"], a["centro"] = 0.0, True
+        elif accion == "borrar":
+            a["topes"] = {"abajo": None, "arriba": None}
+        elif accion == "arriba" and a["centro"] and a["pasos"] >= 1:
+            a["topes"]["arriba"] = int(round(a["pasos"]))
+        elif accion == "abajo" and a["centro"] and a["pasos"] <= -1:
+            a["topes"]["abajo"] = int(round(a["pasos"]))
+
     def depuracion(self):
         return {"puerto": "simulador", "ultima_orden": str(self.marcha[:2]) if self.marcha else "",
                 "ultima_respuesta": "", "hace_ms": 0}
@@ -87,7 +125,10 @@ class Simulador:
         self.avanzar()
         sensores = {s: {"angulo": round(self.real[s] - self.cero[s], 1) if self.calibrado[s] == "ok" else None,
                         "estado": self.calibrado[s]} for s in self.RANGO}
-        return {"conectado": True, "secciones": list(SECCIONES), "sensores": sensores}
+        a = self.altura
+        altura = {"pasos": int(round(a["pasos"])), "centro": a["centro"], "topes": dict(a["topes"]),
+                  "modo": "manual" if a["manual"] else "auto"}
+        return {"conectado": True, "secciones": list(SECCIONES), "sensores": sensores, "altura": altura}
 
 
 def comprobacion(texto):
@@ -114,20 +155,45 @@ def leer_angulo(valor):
     return {"angulo": round(angulo, 1), "estado": "ok"}
 
 
+def leer_topes(valor):
+    """ "-4000:3800", "-:3800" o "no" -> {"abajo": -4000|None, "arriba": 3800|None}."""
+    abajo, _, arriba = valor.partition(":")
+    topes = {}
+    for lado, texto in (("abajo", abajo), ("arriba", arriba)):
+        try:
+            topes[lado] = int(texto)
+        except ValueError:
+            topes[lado] = None
+    return topes
+
+
+def leer_altura(campos):
+    """Los pasos de la altura de la linea E, o None si no vienen (main.py viejo o sin stepper)."""
+    try:
+        pasos = int(campos["pasos_altura"])
+    except (KeyError, ValueError):
+        return None
+    return {"pasos": pasos, "centro": campos.get("centro_altura") == "si",
+            "topes": leer_topes(campos.get("topes_altura", "no")),
+            "modo": "manual" if campos.get("modo_altura") == "manual" else "auto"}
+
+
 def leer_respuesta(linea):
-    """Lo que informa una linea "E cabeza=detenido ang_piernas=12.5*XX", o None si no es valida:
-    {"secciones": ["cabeza", ...], "sensores": {"piernas": {"angulo": 12.5, "estado": "ok"}}}."""
+    """Lo que informa una linea "E cabeza=detenido ang_piernas=12.5 pasos_altura=120 ...*XX", o None
+    si no es valida: {"secciones": ["cabeza", ...], "sensores": {"piernas": {"angulo": 12.5, "estado": "ok"}},
+    "altura": {"pasos", "centro", "topes", "modo"} o None}."""
     texto, separador, suma = linea.strip().rpartition("*")
     if not separador or not texto.startswith("E ") or suma != comprobacion(texto):
         return None
-    secciones, sensores = [], {}
+    secciones, sensores, campos = [], {}, {}
     for parte in texto.split(" ")[1:]:
         clave, _, valor = parte.partition("=")
+        campos[clave] = valor
         if clave in SECCIONES:
             secciones.append(clave)
         elif clave.startswith("ang_") and clave[4:] in SECCIONES:
             sensores[clave[4:]] = leer_angulo(valor)
-    return {"secciones": secciones, "sensores": sensores}
+    return {"secciones": secciones, "sensores": sensores, "altura": leer_altura(campos)}
 
 
 class Esp32Serial:
@@ -140,9 +206,12 @@ class Esp32Serial:
         self.orden = None  # (seccion, direccion) mientras un motor deba seguir en marcha
         self.pendiente_parar = False
         self.calibraciones = []  # [(seccion, "plano"|"subido")] por mandar, una por vez
+        self.ajustes = []  # ordenes de la altura ("T altura centro", "A altura manual"...) por mandar
         self.secciones = []
         self.sensores = {}  # lo ultimo que dijo el ESP32 de cada sensor de angulo
         self.avisado_sensor = {}  # ultimo estado de cada sensor anotado en el registro
+        self.altura = None  # pasos, centro, topes y modo de la altura, si el ESP32 los informa
+        self.avisado_altura = None  # lo ultimo anotado de la altura (sin los pasos, que cambian todo el tiempo)
         self.puerto = None  # para la depuracion: puerto abierto, ultima linea enviada y ultima respuesta
         self.ultima_orden = ""
         self.ultima_respuesta = ""
@@ -185,10 +254,17 @@ class Esp32Serial:
             self.calibraciones.append((seccion, posicion))
         self.despertar.set()
 
+    def ajustar_altura(self, accion):
+        """centro, arriba, abajo, borrar (orden T) o manual, auto (orden A)."""
+        letra = "A" if accion in ("manual", "auto") else "T"
+        with self.bloqueo:
+            self.ajustes.append(f"{letra} altura {accion}")
+        self.despertar.set()
+
     def estado(self):
         vivo = self.vivo()
         return {"conectado": vivo, "secciones": list(self.secciones) if vivo else [],
-                "sensores": dict(self.sensores) if vivo else {}}
+                "sensores": dict(self.sensores) if vivo else {}, "altura": self.altura if vivo else None}
 
     # ---------- hilo del puerto ----------
     def buscar_puerto(self):
@@ -225,6 +301,17 @@ class Esp32Serial:
                 self.avisado_sensor[seccion] = sensor["estado"]
                 self.anotar(f"sensor de angulo de {seccion}: {sensor['estado']}")
 
+    def anotar_altura(self):
+        """Deja en el registro cuando cambia el modo, el centro o los topes de la altura."""
+        if self.altura is None:
+            return
+        resumen = (self.altura["modo"], self.altura["centro"], tuple(self.altura["topes"].values()))
+        if resumen != self.avisado_altura:
+            self.avisado_altura = resumen
+            topes = self.altura["topes"]
+            self.anotar(f"altura: {self.altura['modo']}, {'con' if self.altura['centro'] else 'sin'} centro, "
+                        f"topes {topes['abajo']} / {topes['arriba']}, en {self.altura['pasos']} pasos")
+
     def avisar(self, texto):
         if texto != self.avisado:
             self.avisado = texto
@@ -238,6 +325,8 @@ class Esp32Serial:
             if self.calibraciones:
                 seccion, posicion = self.calibraciones.pop(0)
                 return con_comprobacion(f"C {seccion} {posicion}")
+            if self.ajustes:
+                return con_comprobacion(self.ajustes.pop(0))
             if self.orden:
                 return con_comprobacion(f"M {self.orden[0]} {self.orden[1]}")
         return con_comprobacion("P")
@@ -265,11 +354,13 @@ class Esp32Serial:
                 if respuesta is not None:
                     self.secciones = respuesta["secciones"]
                     self.sensores = respuesta["sensores"]
+                    self.altura = respuesta["altura"]
                     self.ultima_respuesta = linea.decode("ascii", "replace").strip()
                     self.visto = time.monotonic()
                     limite = self.visto + SILENCIO_REABRIR
                     self.avisar(f"ESP32 conectado en {puerto.port}: {', '.join(self.secciones)}")
                     self.anotar_sensores()
+                    self.anotar_altura()
             if self.visto is not None and not self.vivo():
                 self.avisar("el ESP32 dejo de responder")
             if ahora >= limite:

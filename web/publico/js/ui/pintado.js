@@ -1,6 +1,6 @@
 /* Lleva el estado a la pantalla. Solo lee estado.js: nunca manda ordenes. */
 import { CONFIG, SECCIONES, SECCIONES_NUMERICAS, SUFIJO } from '../config.js';
-import { conSensor, control, estaMoviendo, panel, puedeMover, sesion } from '../estado.js';
+import { bloqueoAltura, conSensor, control, estaMoviendo, panel, puedeMover, sesion } from '../estado.js';
 import { conSigno, porId } from '../utilidades.js';
 import { pintarDibujo } from './dibujo.js';
 
@@ -51,7 +51,10 @@ function pintarSeccion(seccion) {
   pintarRiel(seccion);
   porId('tarjeta' + suf).classList.toggle('en-movimiento', estaMoviendo(seccion));
   porId('sinActuador' + suf).classList.toggle('d-none', !hardware.conectado || hardware.secciones.includes(seccion));
-  if (seccion === 'altura') return;   // sin sensor ni finales: no hay numero que mostrar
+  if (seccion === 'altura') {   // sin numero que mostrar: su modo y, para el desarrollador, sus pasos
+    pintarAltura();
+    return;
+  }
   porId('val' + suf).textContent = conSigno(valor[seccion]);
   porId('obj' + suf).textContent = (destino && destino[seccion] !== null) ? conSigno(destino[seccion]) + '°' : '—';
   pintarSensor(seccion);
@@ -94,6 +97,80 @@ function pintarSensor(seccion) {
   const listo = control.conectado && panel.hardware.conectado && estado !== 'falla' && quieta;
   caja.querySelector('[data-posicion="plano"]').disabled = !listo;
   caja.querySelector('[data-posicion="subido"]').disabled = !listo || estado === 'sincal';
+}
+
+/* Altura: automatico o manual (pedal), su aviso y el panel de pasos (solo el perfil Desarrollador) */
+const AVISO_ALTURA = {
+  manual:       ['alert-warning', 'Manual: la altura se mueve con el pedal de la camilla. Sus botones están bloqueados.'],
+  sincentro:    ['alert-warning', 'Falta poner el centro de la altura: queda bloqueada hasta que el perfil Desarrollador lo ponga.'],
+  sincentroDev: ['alert-info', 'Sin centro: la cuenta de pasos no vale y la altura va despacio. Llévala al centro y toca «Aquí es el centro» en Pasos.']
+};
+
+function textoPasos(a) {
+  if (a.modo === 'manual') return 'En manual la cuenta no vale: pasa a Automático para calibrar.';
+  if (!a.centro) return 'Paso 1: lleva la altura al centro y toca Aquí es el centro.';
+  if (a.topes.arriba === null) return 'Centro puesto. Paso 2: sube hasta casi el final y toca Guardar tope de arriba.';
+  if (a.topes.abajo === null) return 'Paso 3: baja hasta casi el final y toca Guardar tope de abajo.';
+  return `Calibrada: ${a.topes.arriba - a.topes.abajo} pasos de recorrido. La altura frena cerca de cada tope y se detiene sola.`;
+}
+
+function pintarAltura() {
+  const a = panel.altura;
+  const dev = sesion.rol === 'dev' && Boolean(a);
+  const enLinea = control.conectado && panel.hardware.conectado;
+  const badge = porId('modoAltura');
+  badge.classList.toggle('d-none', !a);
+  if (a) {
+    const manual = a.modo === 'manual';
+    badge.textContent = manual ? 'Manual · pedal' : 'Automático';
+    badge.className = 'badge tipo-dato text-uppercase ms-auto ' + (manual ? 'text-bg-warning' : 'text-bg-success');
+  }
+  porId('filaModoAltura').classList.toggle('d-none', !dev);
+  if (dev) {
+    ['Auto', 'Manual'].forEach((m) => {
+      const radio = porId('modoAltura' + m);
+      radio.checked = a.modo === m.toLowerCase();
+      radio.disabled = !enLinea;
+    });
+  }
+
+  const hayTopes = Boolean(a) && (a.topes.abajo !== null || a.topes.arriba !== null);
+  const clave = bloqueoAltura() || (dev && a.modo === 'auto' && hayTopes && !a.centro ? 'sincentroDev' : '');
+  const aviso = porId('avisoAltura');
+  aviso.classList.toggle('d-none', !clave);
+  if (clave) {
+    aviso.className = 'alert py-2 px-3 mb-0 small ' + AVISO_ALTURA[clave][0];
+    if (aviso.textContent !== AVISO_ALTURA[clave][1]) aviso.textContent = AVISO_ALTURA[clave][1];
+  }
+  porId('textoAltura').textContent = 'Mantén presionado hasta alcanzar la altura deseada. ' +
+    (conSensor('altura') ? 'La barra muestra la posición real, entre los topes.' : 'El recorrido es aproximado.');
+
+  if (!dev && panel.pasosAbiertos) panel.pasosAbiertos = false;
+  porId('btnPasosAltura').classList.toggle('d-none', !dev || panel.pasosAbiertos);
+  const caja = porId('pasosAltura');
+  caja.classList.toggle('d-none', !panel.pasosAbiertos);
+  if (!panel.pasosAbiertos) return;
+
+  const { pasos, centro, topes, modo } = a;
+  porId('numPasosAltura').textContent = conSigno(pasos);
+  porId('centroAltura').textContent = modo === 'manual' ? 'no vale (manual)' : (centro ? 'puesto' : 'falta');
+  const lo = topes.abajo !== null ? topes.abajo : Math.min(-1000, pasos - 500);
+  const hi = topes.arriba !== null ? topes.arriba : Math.max(1000, pasos + 500);
+  const pct = (v) => Math.max(0, Math.min(100, (v - lo) / (hi - lo) * 100));
+  porId('pasosAguja').style.left = pct(pasos) + '%';
+  porId('pasosCero').style.left = pct(0) + '%';
+  const relleno = porId('pasosRelleno');
+  relleno.style.left = Math.min(pct(0), pct(pasos)) + '%';
+  relleno.style.width = Math.abs(pct(pasos) - pct(0)) + '%';
+  porId('pasosMin').textContent = topes.abajo !== null ? 'tope ' + topes.abajo : 'sin tope abajo';
+  porId('pasosMax').textContent = topes.arriba !== null ? 'tope +' + topes.arriba : 'sin tope arriba';
+
+  const listo = enLinea && !estaMoviendo('altura') && modo === 'auto';
+  caja.querySelector('[data-altura="centro"]').disabled = !listo;
+  caja.querySelector('[data-altura="arriba"]').disabled = !listo || !centro || pasos < 1;
+  caja.querySelector('[data-altura="abajo"]').disabled = !listo || !centro || pasos > -1;
+  caja.querySelector('[data-altura="borrar"]').disabled = !listo || !hayTopes;
+  porId('pasosEstado').textContent = textoPasos(a);
 }
 
 function pintarEstado() {

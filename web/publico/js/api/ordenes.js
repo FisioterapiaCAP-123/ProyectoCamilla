@@ -75,5 +75,10 @@ export const SERVIDOR = {
 
   // POST /api/calibrar {seccion, posicion:"plano"|"subido"}   solo perfil Desarrollador, con la seccion quieta
   //   -> {ok:true} o {ok:false, mensaje:"..."}; el resultado se ve en hardware.sensores
-  calibrar(seccion, posicion) { return enviarControl('/api/calibrar', { seccion, posicion }); }
+  calibrar(seccion, posicion) { return enviarControl('/api/calibrar', { seccion, posicion }); },
+
+  // POST /api/altura {accion:"centro"|"arriba"|"abajo"|"borrar"|"manual"|"auto"}   solo perfil Desarrollador:
+  //   pasos del motor de la altura (centro y topes) o su modo (manual = pedal)
+  //   -> {ok:true} o {ok:false, mensaje:"..."}; el resultado se ve en hardware.altura
+  altura(accion) { return enviarControl('/api/altura', { accion }); }
 };

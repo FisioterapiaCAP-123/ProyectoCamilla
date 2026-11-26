@@ -4,8 +4,24 @@
     <div class="card-header bg-body-tertiary d-flex align-items-center gap-2 flex-wrap">
       <h2 class="tipo-titulo text-uppercase mb-0 titulo-tarjeta">Altura</h2>
       <span class="badge text-bg-secondary tipo-dato text-uppercase ms-auto d-none" id="sinActuadorAltura">Sin actuador</span>
+      <span class="badge tipo-dato text-uppercase ms-auto d-none" id="modoAltura" title="Modo de la altura">Automático</span>
+      <button type="button" class="btn btn-sm btn-outline-secondary tipo-titulo text-uppercase fw-semibold d-none"
+              id="btnPasosAltura" data-abrir-pasos>Pasos</button>
     </div>
     <div class="card-body d-flex flex-column gap-3">
+
+      <!-- Automatico o manual (vistas/altura.js): solo lo cambia el perfil Desarrollador -->
+      <div class="d-flex align-items-center gap-2 flex-wrap d-none" id="filaModoAltura">
+        <div class="btn-group" role="group" aria-label="Modo de la altura">
+          <input type="radio" class="btn-check" name="modoAltura" id="modoAlturaAuto" value="auto" autocomplete="off">
+          <label class="btn btn-outline-primary tipo-titulo text-uppercase fw-semibold" for="modoAlturaAuto">Automático</label>
+          <input type="radio" class="btn-check" name="modoAltura" id="modoAlturaManual" value="manual" autocomplete="off">
+          <label class="btn btn-outline-warning tipo-titulo text-uppercase fw-semibold" for="modoAlturaManual">Manual (pedal)</label>
+        </div>
+        <span class="small text-body-secondary">En manual se usa el pedal: el motor queda suelto y no recibe órdenes.</span>
+        <span class="small text-danger w-100" id="modoMensajeAltura"></span>
+      </div>
+      <div class="alert py-2 px-3 mb-0 small d-none" id="avisoAltura" role="status"></div>
 
       <div class="row g-2">
         <div class="col-6">
@@ -43,9 +59,48 @@
         </div>
       </div>
 
-      <p class="small text-center mb-0 text-body-secondary">
+      <p class="small text-center mb-0 text-body-secondary" id="textoAltura">
         Mantén presionado hasta alcanzar la altura deseada. El recorrido es aproximado.
       </p>
+
+      <!-- Pasos del motor (vistas/altura.js): solo el perfil Desarrollador. Dentro de la tarjeta,
+           porque entre un paso y otro hay que mover la altura con sus botones. -->
+      <div class="border border-2 rounded-3 p-3 d-none calibrar" id="pasosAltura">
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <b class="tipo-titulo text-uppercase">Pasos del motor de altura</b>
+          <button type="button" class="btn-close ms-auto" data-cerrar-pasos aria-label="Cerrar los pasos"></button>
+        </div>
+        <div class="d-flex align-items-end justify-content-between gap-3 mb-2">
+          <div class="cifra"><span id="numPasosAltura">0</span><span class="unidad"> pasos</span></div>
+          <div class="text-end small fw-semibold lh-sm text-body-secondary">
+            Centro
+            <b class="d-block tipo-dato" id="centroAltura">&mdash;</b>
+          </div>
+        </div>
+        <div class="riel-pista">
+          <div class="riel-cero" id="pasosCero"></div>
+          <div class="riel-relleno" id="pasosRelleno"></div>
+          <div class="riel-aguja" id="pasosAguja"></div>
+        </div>
+        <div class="riel-escala tipo-dato mt-1 text-body-secondary">
+          <span class="riel-min" id="pasosMin"></span>
+          <span class="riel-max" id="pasosMax"></span>
+        </div>
+        <ol class="small ps-3 my-2">
+          <li>Lleva la altura al centro de su recorrido (en Manual con el pedal, o con Subir y Bajar). En Automático, toca <b>Aquí es el centro</b>.</li>
+          <li>Sube despacio hasta casi el final, sin que se atasque, y toca <b>Guardar tope de arriba</b>. Deja un margen.</li>
+          <li>Baja hasta casi el final de abajo y toca <b>Guardar tope de abajo</b>.</li>
+          <li>Listo: la altura frena cerca de cada tope y se detiene sola.</li>
+        </ol>
+        <div class="row g-2">
+          <div class="col-6"><button type="button" class="btn btn-outline-primary w-100 tipo-titulo text-uppercase fw-semibold" data-altura="centro">Aquí es el centro</button></div>
+          <div class="col-6"><button type="button" class="btn btn-outline-danger w-100 tipo-titulo text-uppercase fw-semibold" data-altura="borrar">Borrar topes</button></div>
+          <div class="col-6"><button type="button" class="btn btn-outline-primary w-100 tipo-titulo text-uppercase fw-semibold" data-altura="abajo">Guardar tope de abajo</button></div>
+          <div class="col-6"><button type="button" class="btn btn-outline-primary w-100 tipo-titulo text-uppercase fw-semibold" data-altura="arriba">Guardar tope de arriba</button></div>
+        </div>
+        <p class="small fw-semibold mb-0 mt-2" id="pasosEstado" aria-live="polite"></p>
+        <p class="small text-danger mb-0 mt-1" id="pasosMensaje"></p>
+      </div>
 
     </div>
   </section>

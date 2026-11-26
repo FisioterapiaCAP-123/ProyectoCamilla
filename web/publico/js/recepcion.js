@@ -57,6 +57,7 @@ export function recibir(e) {
       pintar();
     }
     recibirSensores(e.hardware.sensores || {});
+    recibirAltura(e.hardware.altura || null);
   }
 
   // El administrador puede cambiar el rol mientras la pagina esta abierta
@@ -96,6 +97,16 @@ function recibirSensores(sensores) {
   });
   panel.sensores = sensores;
   if (cambio) pintar();
+}
+
+/* Pasos de la altura: el modo, el centro y los topes van al registro; los pasos solo a la pantalla */
+function recibirAltura(altura) {
+  const resumen = (a) => (a ? `${a.modo}, ${a.centro ? 'con' : 'sin'} centro, topes ${a.topes.abajo} / ${a.topes.arriba}` : 'sin datos');
+  const antes = panel.altura;
+  if (resumen(antes) !== resumen(altura)) registrar('← altura: ' + resumen(altura));
+  if (JSON.stringify(antes) === JSON.stringify(altura)) return;
+  panel.altura = altura;
+  pintar();
 }
 
 export function reconectado() {

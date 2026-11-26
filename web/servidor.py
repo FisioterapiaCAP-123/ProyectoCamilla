@@ -263,6 +263,46 @@ class Camilla:
         anotar(f"{usuario} calibro el sensor de {seccion}: {posicion}" + (" (simulado)" if self.hardware.simulado else ""))
         return True, None
 
+    def altura(self):
+        """Pasos, centro, topes y modo de la altura, o None si el ESP32 no los informa."""
+        return self.hardware.estado().get("altura")
+
+    def bloqueo_altura(self, rol):
+        """Por que no se puede mover la altura ahora, o None si se puede."""
+        a = self.altura()
+        if not a:
+            return None
+        if a["modo"] == "manual":
+            return "La altura está en manual: se mueve con el pedal de la camilla."
+        hay_topes = a["topes"]["abajo"] is not None or a["topes"]["arriba"] is not None
+        if hay_topes and not a["centro"] and rol != "dev":
+            return "Falta poner el centro de la altura: lo hace el perfil Desarrollador."
+        return None
+
+    def ajustar_altura(self, usuario, accion):
+        """centro, arriba, abajo y borrar (pasos del NEMA), manual y auto (modo). Solo con la altura quieta."""
+        a = self.altura()
+        if a is None:
+            return False, "El ESP32 no informa los pasos de la altura (¿main.py viejo o sin el motor?)."
+        if accion != "manual" and self.motor and self.motor["seccion"] == "altura":
+            return False, "Detén la altura antes."
+        if accion in ("centro", "arriba", "abajo", "borrar") and a["modo"] == "manual":
+            return False, "Primero pasa la altura a automático."
+        if accion in ("arriba", "abajo") and not a["centro"]:
+            return False, "Primero pon el centro."
+        if accion == "arriba" and a["pasos"] < 1:
+            return False, "El tope de arriba tiene que quedar arriba del centro."
+        if accion == "abajo" and a["pasos"] > -1:
+            return False, "El tope de abajo tiene que quedar abajo del centro."
+        if accion == "manual" and self.motor and self.motor["seccion"] == "altura":
+            self.parar_motores("la altura pasa a manual")
+        self.hardware.ajustar_altura(accion)
+        que = {"centro": "puso el centro de la altura", "arriba": f"guardo el tope de arriba en {a['pasos']} pasos",
+               "abajo": f"guardo el tope de abajo en {a['pasos']} pasos", "borrar": "borro los topes de la altura",
+               "manual": "paso la altura a manual (pedal)", "auto": "paso la altura a automatico"}[accion]
+        anotar(f"{usuario} {que}" + (" (simulado)" if self.hardware.simulado else ""))
+        return True, None
+
     def cambiar_paro(self, activo, quien):
         if activo != self.paro:
             anotar(f"PARO DE EMERGENCIA {'ACTIVADO' if activo else 'liberado'} por {quien}")
@@ -281,6 +321,7 @@ class Camilla:
             "simulacion": self.hardware.simulado,
             "esp32": self.hardware.depuracion(),
             "sensores": self.hardware.estado().get("sensores", {}),
+            "altura": self.altura(),
             "motor": motor,
             "titular": self.titular,
             "paro": self.paro,
@@ -316,8 +357,9 @@ class Camilla:
             "registros": ({"pin": sesion["pin"], "abierto": time.monotonic() < sesion["abierto_hasta"],
                            "pide_clave": not sesion["con_clave"]}
                           if sesion and con_pin(sesion) else None),
-            # angulo real de las secciones con sensor calibrado (MPU6050)
-            "telemetria": {s: v["angulo"] for s, v in equipo.get("sensores", {}).items() if v["angulo"] is not None},
+            # angulo real de las secciones con sensor calibrado (MPU6050) y altura real (0 a 100)
+            "telemetria": dict({s: v["angulo"] for s, v in equipo.get("sensores", {}).items() if v["angulo"] is not None},
+                               **altura_real(equipo.get("altura"))),
         }
 
     def vigilar(self):
@@ -337,6 +379,17 @@ class Camilla:
             self.respuestas.pop(token, None)
         for token in [k for k, (_, cuando) in self.cerradas.items() if t - cuando > SESION_HORAS * 3600]:
             del self.cerradas[token]
+
+
+def altura_real(a):
+    """{"altura": 0 a 100} entre el tope de abajo y el de arriba, si la cuenta de pasos vale y
+    estan los dos topes; si no, {} (la pagina sigue con su estimacion)."""
+    if not a or not a["centro"] or a["modo"] != "auto" or None in a["topes"].values():
+        return {}
+    abajo, arriba = a["topes"]["abajo"], a["topes"]["arriba"]
+    if arriba <= abajo:
+        return {}
+    return {"altura": round(max(0.0, min(100.0, (a["pasos"] - abajo) * 100 / (arriba - abajo))), 1)}
 
 
 camilla = Camilla()
@@ -371,7 +424,20 @@ def accion_mover(c, d, s, t):
     movimiento = seccion_y_direccion(d, "dir")
     if not movimiento or not orden_vigente(s, d):
         return False, None
+    if movimiento[0] == "altura":
+        bloqueo = c.bloqueo_altura(s["rol"])
+        if bloqueo:
+            return False, bloqueo
     return c.mover(s["usuario"], *movimiento)
+
+
+def accion_altura(c, d, s, t):
+    if s["rol"] != "dev":
+        return False, "Solo el perfil Desarrollador puede cambiar la altura entre automático y manual o calibrar sus pasos."
+    accion = d.get("accion")
+    if accion not in ("centro", "arriba", "abajo", "borrar", "manual", "auto"):
+        return False, None
+    return c.ajustar_altura(s["usuario"], accion)
 
 
 def accion_calibrar(c, d, s, t):
@@ -397,6 +463,7 @@ ACCIONES = {
     "/api/control/liberar": lambda c, d, s, t: c.soltar(s["usuario"]),
     "/api/mover": accion_mover,
     "/api/calibrar": accion_calibrar,
+    "/api/altura": accion_altura,
     "/api/detener": accion_detener,
 }
 

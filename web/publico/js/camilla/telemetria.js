@@ -16,6 +16,11 @@ export function aplicarAngulos(lectura) {
       cambio = true;
     }
   });
+  /* Altura real (0 a 100 entre los topes): solo llega con el centro y los dos topes puestos */
+  if (typeof lectura.altura === 'number' && lectura.altura !== panel.valor.altura) {
+    panel.valor.altura = lectura.altura;
+    cambio = true;
+  }
   if (cambio) pintar();
 }
 

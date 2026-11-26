@@ -22,6 +22,15 @@ Corriente del driver = Vref x 2 (Vref entre el potenciometro y GND).
 La altura no tiene finales de carrera: se mueve solo mientras se mantiene el boton.
 Nunca conectar o desconectar el motor con la fuente encendida: se quema el driver.
 
+Pasos de la altura: el ESP32 cuenta los pasos que da el NEMA (+ hacia arriba, 0 = centro)
+y los guarda en altura.json cada vez que para, junto con los topes y el modo. Desde la
+pagina (perfil Desarrollador): con la altura en el centro, "centro" pone la cuenta en 0;
+despues se guarda el tope de arriba y el de abajo donde esta ahora. Con el centro puesto,
+la altura frena a PASOS_INICIO al acercarse a un tope y no pasa de el. Si se corta la luz
+en marcha, al volver la cuenta no vale ("sin centro") hasta poner el centro otra vez.
+Modo manual: la altura se mueve con el pedal de la camilla. El NEMA queda suelto (EN = 1),
+no obedece ordenes y la cuenta deja de valer: al volver a automatico hay que poner el centro.
+
 Pines de la placa propia (25-11 y 26-11): EN de la altura en el 26 y extender piernas
 en el 13 (antes 13 y 26); cabeza extender en el 22 y retraer en el 23 (antes 18 y 19).
 Con la protoboard vieja hay que cambiar esos cables.
@@ -45,12 +54,17 @@ Ordenes que recibe, una por linea, terminadas en *XX (comprobacion en hexadecima
     X                  detener todo
     P                  la Raspberry sigue conectada
     C piernas plano    calibrar el MPU de esa seccion (plano o subido), con la seccion quieta
+    T altura centro    pasos de la altura: centro (cuenta en 0), arriba o abajo (tope donde
+                       esta ahora) o borrar (sin topes), con la altura quieta y en automatico
+    A altura manual    modo de la altura: manual (pedal) o auto
 
 A cada orden valida responde con el estado de todas las secciones:
-    E cabeza=detenido piernas=detenido final_piernas=no ang_piernas=12.5*XX
+    E cabeza=detenido piernas=detenido final_piernas=no ang_piernas=12.5 pasos_altura=120
+      centro_altura=si topes_altura=-4000:3800 modo_altura=auto*XX   (todo en una linea)
     final_piernas: no, arriba, abajo o falla (los dos tocados: revisar cables)
     ang_piernas: el angulo en grados, o falla (el MPU no responde), sincal (sin
         calibrar), plano (falta "subido") o poco ("subido" quedo muy cerca de "plano")
+    topes_altura: abajo:arriba en pasos ("-" si falta uno) o no
 
 Seguridad:
     - Una seccion se detiene sola si pasan LIMITE_SIN_ORDEN_MS sin recibir su M.
@@ -92,6 +106,8 @@ PASOS_VELOCIDAD = 1000      # altura: pasos por segundo a toda velocidad (5 vuel
 PASOS_INICIO = 250          # altura: a esta velocidad arranca; mas rapido de golpe no arranca con carga
 PASOS_ACELERACION = 1500    # altura: cuanto sube la velocidad cada segundo (llega al maximo en 0.5 s)
 MANTENER_FUERZA = True      # altura: detenido, el motor sigue sujetando (se calienta)
+ALTURA_LENTO_PASOS = 400    # altura: a menos de estos pasos de un tope frena a PASOS_INICIO
+ARCHIVO_ALTURA = "altura.json"   # pasos, topes y modo de la altura: cargar main.py no lo borra
 PIERNAS_MPU = 0x68          # piernas: direccion de su MPU6050 (AD0 a GND); None si no esta conectado
 PIERNAS_SCL = 21            # piernas: su propio I2C (placa J7)
 PIERNAS_SDA = 19
@@ -156,44 +172,118 @@ def salida_pwm(numero, frecuencia=FRECUENCIA_PWM):
 
 class Stepper:
     """Motor paso a paso con DRV8825. El PWM en STEP da los pulsos solo (uno por paso):
-    su frecuencia es la velocidad. "a" sube y "b" baja. Arranca despacio y acelera."""
+    su frecuencia es la velocidad. "a" sube y "b" baja. Arranca despacio, acelera y frena.
+
+    Cuenta los pasos (velocidad x tiempo; + hacia arriba, 0 = centro) y los guarda en
+    ARCHIVO_ALTURA cada vez que para, con los topes y el modo. Con el centro puesto va
+    despacio cerca de un tope y no pasa de el. En manual (pedal) queda suelto y no se mueve."""
 
     def __init__(self, pin_step, pin_dir, pin_en):
+        self.pasos = 0.0        # posicion contada
+        self.centro = False     # la cuenta vale: se puso el centro y nada la movio por fuera
+        self.topes = {"abajo": None, "arriba": None}    # en pasos; None = sin ese tope
+        self.manual = False     # se mueve con el pedal: suelto y sin ordenes
+        self.cargar()
         self.step = salida_pwm(pin_step, PASOS_INICIO)
         self.dir = Pin(pin_dir, Pin.OUT, value=0)
-        self.en = Pin(pin_en, Pin.OUT, value=0 if MANTENER_FUERZA else 1)
+        self.en = Pin(pin_en, Pin.OUT, value=0 if MANTENER_FUERZA and not self.manual else 1)
         self.velocidad = 0
-        self.desde = 0
+        self.sentido = 0        # 1 sube, -1 baja
+        self.marca = time.ticks_us()    # hasta aqui ya estan contados los pasos
+        self.cambio = time.ticks_ms()   # ultimo cambio de velocidad, para la rampa
+
+    def cargar(self):
+        try:
+            with open(ARCHIVO_ALTURA) as archivo:
+                datos = json.load(archivo)
+            self.pasos = float(datos.get("pasos", 0))
+            self.manual = bool(datos.get("manual", False))
+            # si se apago o reinicio en marcha, la ultima cuenta guardada ya no vale
+            self.centro = bool(datos.get("centro")) and not datos.get("moviendo") and not self.manual
+            for lado in ("abajo", "arriba"):
+                valor = datos.get("topes", {}).get(lado)
+                self.topes[lado] = None if valor is None else int(valor)
+        except (OSError, ValueError, TypeError, AttributeError):
+            pass    # sin archivo (la primera vez) o danado: sin centro ni topes
+
+    def guardar(self, moviendo=False):
+        datos = {"pasos": int(round(self.pasos)), "centro": self.centro, "topes": self.topes,
+                 "manual": self.manual, "moviendo": moviendo}
+        try:
+            with open(ARCHIVO_ALTURA, "w") as archivo:
+                json.dump(datos, archivo)
+        except OSError as error:
+            print("# no se pudo guardar la altura:", error)
+
+    def contar(self):
+        ahora = time.ticks_us()
+        if self.velocidad:
+            self.pasos += self.sentido * self.velocidad * time.ticks_diff(ahora, self.marca) / 1000000
+        self.marca = ahora
 
     def poner_velocidad(self, pasos):
+        self.contar()       # lo andado a la velocidad anterior
         if pasos == FRECUENCIA_PWM:
             pasos += 1      # con la misma frecuencia compartiria reloj con los puentes H
         self.velocidad = pasos
         self.step.freq(pasos)
         self.step.duty_u16(32768)
+        self.cambio = time.ticks_ms()
 
     def detener(self):
+        movia = self.velocidad > 0
+        self.contar()
         self.step.duty_u16(0)
         self.velocidad = 0
-        if not MANTENER_FUERZA:
+        if self.manual or not MANTENER_FUERZA:
             self.en.value(1)
+        if movia:
+            self.guardar()
 
     def encender(self, cual):
         self.detener()
+        self.sentido = 1 if cual == "a" else -1
         self.dir.value(SUBIR_CON_DIR if cual == "a" else 1 - SUBIR_CON_DIR)
         self.en.value(0)
+        if self.centro:
+            self.guardar(moviendo=True)     # si se corta la luz en marcha, al volver no vale
         time.sleep_ms(1)    # el driver necesita un momento tras cambiar DIR o EN
-        self.desde = time.ticks_ms()
         self.poner_velocidad(min(PASOS_INICIO, PASOS_VELOCIDAD))
 
+    def lento(self):
+        """Va a la velocidad de arranque cerca del tope hacia donde va, o si hay topes
+        pero la cuenta no vale (sin centro)."""
+        if not self.centro:
+            return self.topes["abajo"] is not None or self.topes["arriba"] is not None
+        tope = self.topes["arriba"] if self.sentido > 0 else self.topes["abajo"]
+        return tope is not None and abs(tope - self.pasos) < ALTURA_LENTO_PASOS
+
+    def en_tope(self, cual):
+        """No puede ir hacia "a" (arriba) o "b" (abajo): en manual, o con el tope alcanzado."""
+        if self.manual:
+            return True
+        if not self.centro:
+            return False
+        self.contar()
+        if cual == "a":
+            return self.topes["arriba"] is not None and self.pasos >= self.topes["arriba"]
+        return self.topes["abajo"] is not None and self.pasos <= self.topes["abajo"]
+
     def actualizar(self, ahora):
-        """Rampa: sube la velocidad poco a poco hasta PASOS_VELOCIDAD."""
-        if self.velocidad == 0 or self.velocidad >= PASOS_VELOCIDAD:
+        """Rampa: acelera hasta PASOS_VELOCIDAD y frena a PASOS_INICIO cerca de un tope."""
+        self.contar()
+        if self.velocidad == 0:
             return
-        segundos = time.ticks_diff(ahora, self.desde) / 1000
-        pasos = min(PASOS_VELOCIDAD, int(PASOS_INICIO + PASOS_ACELERACION * segundos))
-        if pasos - self.velocidad >= 10 or pasos == PASOS_VELOCIDAD:
-            self.poner_velocidad(pasos)
+        objetivo = min(PASOS_INICIO, PASOS_VELOCIDAD) if self.lento() else PASOS_VELOCIDAD
+        if objetivo == FRECUENCIA_PWM:
+            objetivo += 1
+        cambio = PASOS_ACELERACION * time.ticks_diff(ahora, self.cambio) / 1000
+        if self.velocidad < objetivo:
+            nueva = min(objetivo, int(self.velocidad + cambio))
+        else:
+            nueva = max(objetivo, int(self.velocidad - cambio))
+        if nueva != self.velocidad and (abs(nueva - self.velocidad) >= 25 or nueva == objetivo):
+            self.poner_velocidad(nueva)
 
 
 class PuenteH:
@@ -349,8 +439,11 @@ class Seccion:
         self.libre_desde = None  # antes de este momento no se puede arrancar
 
     def en_final(self, cual):
+        """Final de carrera tocado, o tope de pasos del stepper (o la altura en manual)."""
         pin = self.finales.get(cual)
-        return pin is not None and pin.value() == FINAL_ACTIVO
+        if pin is not None and pin.value() == FINAL_ACTIVO:
+            return True
+        return any(par.en_tope(cual) for par in self.pares if hasattr(par, "en_tope"))
 
     def topes(self):
         """Los finales tocados, para la linea E: "a", "b", "ab" o ""."""
@@ -415,6 +508,7 @@ else:
             SECCIONES["altura"] = Seccion([Stepper(ALTURA_STEP, ALTURA_DIR, ALTURA_EN)])
         except Exception as error:      # sin altura, cabeza y piernas siguen funcionando
             print("# altura desactivada:", error)
+ALTURA = SECCIONES["altura"].pares[0] if "altura" in SECCIONES else None   # el Stepper, para sus pasos
 
 # Un MPU6050 por seccion, cada uno en su propio I2C (el ESP32 tiene dos: 0 y 1) y con
 # su velocidad. Si uno falla, el otro sensor y los motores siguen igual.
@@ -449,6 +543,45 @@ def calibrar(nombre, posicion):
         guardar_calibracion()
 
 
+def ajustar_altura(accion):
+    """Ordenes T y A de la altura. Todas, salvo pasar a manual, solo con la altura quieta."""
+    if ALTURA is None:
+        return
+    seccion = SECCIONES["altura"]
+    if accion == "manual":
+        seccion.detener()
+        ALTURA.manual, ALTURA.centro = True, False      # el pedal la mueve por fuera
+        ALTURA.en.value(1)
+    elif seccion.marcha is not None:
+        return
+    elif accion == "auto":
+        ALTURA.manual = False
+        ALTURA.en.value(0 if MANTENER_FUERZA else 1)
+    elif ALTURA.manual:
+        return      # con el pedal la cuenta no vale: primero volver a automatico
+    elif accion == "centro":
+        ALTURA.pasos, ALTURA.centro = 0.0, True
+    elif accion == "borrar":
+        ALTURA.topes = {"abajo": None, "arriba": None}
+    elif accion == "arriba" and ALTURA.centro and ALTURA.pasos >= 1:
+        ALTURA.topes["arriba"] = int(round(ALTURA.pasos))
+    elif accion == "abajo" and ALTURA.centro and ALTURA.pasos <= -1:
+        ALTURA.topes["abajo"] = int(round(ALTURA.pasos))
+    else:
+        return
+    ALTURA.guardar()
+
+
+def texto_altura():
+    """Las partes de la linea E con los pasos de la altura."""
+    ALTURA.contar()
+    abajo, arriba = ALTURA.topes["abajo"], ALTURA.topes["arriba"]
+    topes = "no" if abajo is None and arriba is None else "%s:%s" % (
+        "-" if abajo is None else abajo, "-" if arriba is None else arriba)
+    return ["pasos_altura=%d" % int(round(ALTURA.pasos)), "centro_altura=" + ("si" if ALTURA.centro else "no"),
+            "topes_altura=" + topes, "modo_altura=" + ("manual" if ALTURA.manual else "auto")]
+
+
 def detener_todo():
     for seccion in SECCIONES.values():
         seccion.detener()
@@ -467,6 +600,8 @@ def responder():
     partes += ["final_%s=%s" % (nombre, NOMBRE_FINAL[SECCIONES[nombre].topes()])
                for nombre in sorted(SECCIONES) if SECCIONES[nombre].finales]
     partes += ["ang_%s=%s" % (nombre, SENSORES[nombre].estado()) for nombre in sorted(SENSORES)]
+    if ALTURA is not None:
+        partes += texto_altura()
     texto = "E " + " ".join(partes)
     print(texto + "*" + comprobacion(texto))
 
@@ -493,6 +628,10 @@ def procesar(linea, ahora):
         detener_todo()
     elif orden == "C" and len(partes) == 3 and partes[1] in SENSORES and partes[2] in ("plano", "subido"):
         calibrar(partes[1], partes[2])
+    elif orden == "T" and len(partes) == 3 and partes[1] == "altura" and partes[2] in ("centro", "arriba", "abajo", "borrar"):
+        ajustar_altura(partes[2])
+    elif orden == "A" and len(partes) == 3 and partes[1] == "altura" and partes[2] in ("manual", "auto"):
+        ajustar_altura(partes[2])
     responder()
 
 
@@ -541,6 +680,8 @@ def arrancar():
     for nombre in sorted(SENSORES):
         SENSORES[nombre].leer(time.ticks_ms())
         print("# sensor de %s: %s" % (nombre, SENSORES[nombre].estado()))
+    if ALTURA is not None:
+        print("# altura: " + " ".join(texto_altura()))
     print("# camilla lista")
     try:
         bucle()

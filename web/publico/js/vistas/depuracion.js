@@ -16,6 +16,12 @@ function linea(nombre, valor) {
   return (nombre + '            ').slice(0, 12) + valor;
 }
 
+function textoAltura(a) {
+  if (!a) return 'sin datos de pasos';
+  const tope = (v) => (v === null ? '—' : String(v));
+  return `${a.modo} · ${a.pasos} pasos · ${a.centro ? 'con' : 'sin'} centro · topes ${tope(a.topes.abajo)} / ${tope(a.topes.arriba)}`;
+}
+
 function textoSensores(sensores) {
   const partes = ['cabeza', 'piernas'].map((s) => {
     const v = sensores[s];
@@ -35,6 +41,7 @@ function pintar(d) {
     linea('Envía', e.ultima_orden || '—'),
     linea('Recibe', e.ultima_respuesta || '—'),
     linea('Sensores', textoSensores(d.sensores || {})),
+    linea('Altura', textoAltura(d.altura)),
     linea('Motor', motor),
     linea('Paro', d.paro ? 'ACTIVO' : 'no'),
     linea('Control', d.titular || 'nadie'),
