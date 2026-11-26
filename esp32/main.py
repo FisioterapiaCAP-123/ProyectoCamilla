@@ -9,7 +9,7 @@ modulo de 4 reles.
 Altura, ESP32 -> DRV8825 (placa morada; STEP se llama STP):
     GPIO 25 -> STP
     GPIO 33 -> DIR
-    GPIO 13 -> EN        (activo en bajo: 0 = motor con fuerza, 1 = suelto)
+    GPIO 26 -> EN        (activo en bajo: 0 = motor con fuerza, 1 = suelto)
     3.3 V   -> RST y SLP (los dos juntos)
     GND     -> GND del driver, comun con el GND de la fuente del motor
     Fuente del motor (12-24 V) -> VMOT y GND, con un capacitor de 100 uF o mas junto
@@ -21,6 +21,9 @@ DRV8825 -> NEMA 17: 1A, 2A -> bobina A; 1B, 2B -> bobina B (en otras placas A1, 
 Corriente del driver = Vref x 2 (Vref entre el potenciometro y GND).
 La altura no tiene finales de carrera: se mueve solo mientras se mantiene el boton.
 Nunca conectar o desconectar el motor con la fuente encendida: se quema el driver.
+
+Pines de la placa propia (25-11): EN de la altura en el 26 y extender piernas en
+el 13 (antes 13 y 26). Con la protoboard vieja hay que cambiar esos dos cables.
 
 Finales de carrera de piernas: contacto NC del microswitch entre el GPIO y GND
 (C y NC; sin resistencia, se usa la interna). GPIO 17 = arriba (al extender),
@@ -52,7 +55,7 @@ from machine import PWM, Pin
 
 # ---------- CONFIGURACION ----------
 MODULO = "puente"           # "puente": piernas (BTS7960) y cabeza (L298N) | "reles": cabeza con 4 reles
-PIN_EXTENDER = 26           # piernas, BTS7960: RPWM
+PIN_EXTENDER = 13           # piernas, BTS7960: RPWM (placa J5; antes 26)
 PIN_RETRAER = 27            # piernas, BTS7960: LPWM
 PIN_HABILITAR = None        # piernas, BTS7960: R_EN+L_EN; None si van a 3.3 V
 PIERNAS_FINAL_ARRIBA = 17   # piernas: final de carrera al extender (subir); None si no esta conectado
@@ -66,7 +69,7 @@ FRECUENCIA_PWM = 1000       # puente H: Hz
 ALTURA_STEPPER = True       # altura con motor paso a paso; False si no esta conectado
 ALTURA_STEP = 25            # altura, DRV8825: STP (cada pulso es un paso)
 ALTURA_DIR = 33             # altura, DRV8825: DIR
-ALTURA_EN = 13              # altura, DRV8825: EN (0 = con fuerza, 1 = suelto)
+ALTURA_EN = 26              # altura, DRV8825: EN (0 = con fuerza, 1 = suelto; antes 13)
 SUBIR_CON_DIR = 1           # altura: si "Subir" baja, cambiar a 0
 PASOS_VELOCIDAD = 1000      # altura: pasos por segundo a toda velocidad (5 vueltas/s en paso completo,
                             #         casi el maximo de un NEMA 17 a 12 V). Si zumba o salta pasos: 800 o 600

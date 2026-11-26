@@ -1,6 +1,6 @@
 # Contexto del proyecto
 
-**Actualizado el 24-11-2026.** Rama `desarrollo-final`, creada el 20-11 desde `master` (`1eaf7a2`, del 16-11) para terminar el desarrollo. El 24-11 se revisó otra vez contra el código de esta rama, archivo por archivo (tablet de control, portal, finales de piernas, altura sin finales y sin `prueba_stepper.py`). Lo que no se puede comprobar desde el PC (hardware, Raspberry) viene de las notas anteriores, con la fecha en que se probó, o se marca "sin confirmar".
+**Actualizado el 26-11-2026.** Rama `desarrollo-final`, creada el 20-11 desde `master` (`1eaf7a2`, del 16-11) para terminar el desarrollo. El 24-11 se revisó otra vez contra el código de esta rama, archivo por archivo (tablet de control, portal, finales de piernas, altura sin finales y sin `prueba_stepper.py`). El 25-11 se agregó la placa propia del ESP32 (sección 8), que cambia 3 pines. El 26-11 `main.py` pasó a los pines de la placa (sin probar en el hardware). Lo que no se puede comprobar desde el PC (hardware, Raspberry) viene de las notas anteriores, con la fecha en que se probó, o se marca "sin confirmar".
 
 - La versión anterior de este archivo, con la historia del 09-11 al 16-11, el análisis completo de sensores de ángulo y el diseño del encoder, se ve con `git show 1eaf7a2:CONTEXTO.md`.
 - **Otras ramas: no se usan como referencia**, salvo que el usuario lo pida. `manuales` (manuales de la tesis y un diseño con AS5600 sin montar), `muestra-citein` (interfaz sin grados de la presentación del 13-11), `backup-cambios-esp32` (encoder; tiene `codigoesp32.txt` con la clave del WiFi), `esp32-conexion` y `optimizaciones-esp32` (viejas).
@@ -11,9 +11,10 @@
 | Parte | Estado |
 |---|---|
 | Control desde el celular | Funciona. El 13-11 las tres secciones se movieron desde la página con la placa real. |
-| Piernas | 2 actuadores 1500N en paralelo en un BTS7960 (GPIO 26 y 27). Probado en la placa real el 11-11. Finales de carrera NC en GPIO 17 (arriba) y 16 (abajo), en `main.py` desde el 24-11; sin probar en la placa. |
-| Cabeza | 1 actuador 3000N (de 2) en un L298N (GPIO 18 y 19). Probado en la placa real. Faltan su BTS7960 y el segundo actuador. Finales previstos en GPIO 23 y 32, sin código. |
-| Altura | NEMA 17 con DRV8825 (GPIO 25, 33 y 13). Probado sin carga el 13-11 y desde la página el 24-11. **Sin finales de carrera** (decisión del 24-11): se mueve solo mientras se mantiene el botón. Husillo sin definir. |
+| Piernas | 2 actuadores 1500N en paralelo en un BTS7960 (GPIO 13 y 27 desde el 26-11, por la placa propia; antes 26 y 27). Probado en la placa real el 11-11. Finales de carrera NC en GPIO 17 (arriba) y 16 (abajo), en `main.py` desde el 24-11; sin probar en la placa. |
+| Cabeza | 1 actuador 3000N (de 2) en un L298N (GPIO 18 y 19). Probado en la placa real. Faltan su BTS7960 y el segundo actuador. Finales previstos en GPIO 4 (arriba) y 32 (abajo), sin código; antes se pensaba en 23 para arriba. |
+| Altura | NEMA 17 con DRV8825 (GPIO 25, 33 y 26 desde el 26-11; antes EN en el 13). Probado sin carga el 13-11 y desde la página el 24-11. **Sin finales de carrera** (decisión del 24-11): se mueve solo mientras se mantiene el botón. Husillo sin definir. |
+| Placa propia del ESP32 | Diseñada el 25-11: una cara, 106 × 70 mm, para fresar en CNC. Sin fresar. Cambia 3 pines (sección 8); `main.py` ya los usa desde el 26-11. |
 | Ángulos y altura en pantalla | Estimados: no hay sensores. Cada página calcula su propia estimación y las demás pantallas no la ven. El sensor de piernas está sin decidir (sección 8). |
 | Tablet de control | Funciona (23 y 24-11, Huawei con Android 7): "Recordar este equipo", PIN de Registros, pantalla completa, app fijada y sin aviso de "sin internet". |
 | "Ir a" y "Plano 0°" | Solo mueven el número y el dibujo. No mueven motores. |
@@ -104,7 +105,7 @@ compi.txt     (sin seguimiento en git) código del compañero. TIENE LA CLAVE DE
 - `ParReles(pin_a, pin_b)`: dos relés por actuador, del código del compañero. Solo con `MODULO = "reles"` (26/27 y 25/33).
 - `Seccion(pares, finales=None)`: los actuadores de una sección arrancan, paran e invierten juntos. Lleva `marcha` (lo que está encendido), `pedido` (lo que pide la Raspberry), `visto` (último `M`) y `libre_desde` (fin de la pausa). `finales` es `{"a": pin, "b": pin}` (creados con `entrada_final`, pull-up interno); `en_final(cual)` y `topes()` los leen.
 
-**Secciones creadas hoy:** `piernas` = `PuenteH(26, 27)` con finales 17 y 16, `cabeza` = `PuenteH(18, 19)` y `altura` = `Stepper(25, 33, 13)`. Si el stepper falla al crearse, imprime `# altura desactivada: ...` y las otras dos siguen. Para agregar una sección se edita `SECCIONES`: el servidor la detecta sola por las líneas `E`.
+**Secciones creadas hoy:** `piernas` = `PuenteH(13, 27)` con finales 17 y 16, `cabeza` = `PuenteH(18, 19)` y `altura` = `Stepper(25, 33, 26)` (pines de la placa propia desde el 26-11). Si el stepper falla al crearse, imprime `# altura desactivada: ...` y las otras dos siguen. Para agregar una sección se edita `SECCIONES`: el servidor la detecta sola por las líneas `E`.
 
 **Protocolo por USB.** Una orden por línea, terminada en `*XX` (XOR de los caracteres, en hexadecimal):
 
@@ -124,7 +125,7 @@ ESP32 -> Raspberry   E altura=detenido cabeza=extendiendo piernas=contrayendo fi
 
 **Finales de carrera de piernas:** con el final de una dirección tocado, `Seccion.atender` apaga el puente H y no arranca hacia ese lado; hacia el otro sí. El pedido sigue: si fue ruido, arranca otra vez tras la pausa. La línea `E` agrega `final_piernas=no|arriba|abajo|falla` (falla = los dos a la vez, cable suelto) y al arrancar imprime `# finales de piernas: ...`. El servidor ignora ese dato por ahora (la página no lo muestra).
 
-**No hace:** leer finales de la cabeza (previstos en 23 y 32), contar pasos de la altura, medir corriente, limitar el tiempo de marcha ni informar posición. La altura no lleva finales de carrera (decisión del 24-11). Los estados y `final_piernas` de la línea `E` llegan al servidor, pero el servidor solo usa los nombres de las secciones.
+**No hace:** leer finales de la cabeza (previstos en 4 y 32), contar pasos de la altura, medir corriente, limitar el tiempo de marcha ni informar posición. La altura no lleva finales de carrera (decisión del 24-11). Los estados y `final_piernas` de la línea `E` llegan al servidor, pero el servidor solo usa los nombres de las secciones.
 
 **Solo `main.py`:** `prueba_stepper.py` (prueba del stepper desde Thonny, con finales opcionales en GPIO 4 y 35) se borró el 24-11; sigue en git (`git show e1f6a15:esp32/prueba_stepper.py`). La conexión completa del DRV8825 quedó en el encabezado de `main.py`. Todo se prueba desde la página.
 
@@ -297,9 +298,44 @@ Detener un rato: `sudo systemctl stop camilla-pagina camilla-red` (al reiniciar 
 - Con 2 actuadores por sección y sin sensores pueden desincronizarse un poco; se corrige solo al llegar a un extremo, por el tope interno.
 - El de Piernas trae un interruptor de polaridad que no se usa.
 
-**Fuente de motores:** 12 V, 40 A, con varios pares de bornes V+ y V−.
+**Fuente de motores:** S-480-12, 12 V y 40 A.
 
-**Conexiones conocidas al 16-11** (confirmar con el usuario si cambió algo):
+- **Regleta de 9 tornillos:** L, N y ⏚ (120 V), 3 × −V y 3 × +V, y el potenciómetro V.ADJ (dejarlo en 12.0 V).
+- **Cableado en estrella:** cada equipo lleva su propio par +V/−V, con su fusible en el +V. Cabeza 7 A, Piernas 10 A y J4 de la placa (DRV8825) 3 A. Los tres ya se consiguieron (26-11).
+- **BTS7960:** los 12 V van directo de la fuente a B+/B−; nunca pasan por la placa.
+- **Consumo:** con todo moviéndose pide unos 15 A.
+
+**Placa propia del ESP32 (25-11, sin fresar).** Una cara de cobre, 106 × 70 mm, para la fresadora CNC.
+
+- **Archivos:** en el escritorio del usuario, carpeta `placa-camilla/`, con `LEEME.txt`. Ya están en espejo. La guía está en la sección 14.
+- **Montaje:** el ESP32 DOIT de 30 pines y el DRV8825 van enchufados en tiras hembra; los módulos, con cables Dupont.
+
+| Conector | Qué va | Pines |
+|---|---|---|
+| J2 | DRV8825 de la altura | DIR 33, STP 25 y EN 26. SLP y RST a 3V3; M0 a M2 sin conectar (paso completo). |
+| J3 | NEMA 17 (tira macho de 4) | 2A, 1A, 1B y 2B |
+| J4 | 12 V del DRV8825 (bornera) | +12 V y GND, con fusible de 3 A. C1 (100 a 1000 µF, 25 V) en VMOT, con el + abajo. |
+| J5 | BTS7960 de piernas | RPWM 13 y LPWM 27. R_EN, L_EN y VCC a 3V3; R_IS y L_IS sin conectar. |
+| J6 | BTS7960 de cabeza | RPWM 18 y LPWM 19; lo demás como J5 |
+| J7, J8 | MPU6050 de piernas y de cabeza | VCC a 3V3, GND, SCL 22 y SDA 21. Comparten el bus: piernas con AD0 a GND (0x68) y cabeza con AD0 a VCC (0x69). |
+| J9 | Finales de carrera | Cabeza abajo 32, cabeza arriba 4, piernas abajo 16 y piernas arriba 17, cada uno con un GND al lado. |
+| JP1 | Puente de alambre | Une el GND de los MPU con el resto. |
+
+**Pines que cambian con la placa.** Se cambiaron para que las pistas no se crucen en una sola cara.
+
+| Pin | Antes | Con la placa | En `main.py` |
+|---|---|---|---|
+| GPIO 26 | Piernas extender (RPWM) | Altura EN | `ALTURA_EN = 26` (hecho el 26-11) |
+| GPIO 13 | Altura EN | Piernas extender (RPWM) | `PIN_EXTENDER = 13` (hecho el 26-11) |
+| GPIO 4 | Libre (se pensaba en 23) | Final de cabeza arriba | Falta el código de los finales de cabeza |
+
+- **Siguen igual:** 25 y 33 (altura), 27 (piernas retraer), 18 y 19 (cabeza, ahora como RPWM y LPWM del BTS7960), 17 y 16 (finales de piernas), 32 (final de cabeza abajo) y 2 (LED).
+- **Ahora usados:** 21 y 22 pasan de reservados a usados (los dos MPU).
+- **Placa y `main.py` tienen que coincidir.** Desde el 26-11, `main.py` usa los pines de la placa.
+  - Si se sigue usando la protoboard vieja, pasar el cable RPWM de piernas del 26 al 13 y el EN del DRV8825 del 13 al 26.
+  - Si no coinciden, Piernas no extiende y "extender piernas" prende y apaga el driver de la altura. Con `MANTENER_FUERZA = False` sería peor: Piernas extendería sola, sin que sus finales la paren.
+
+**Conexiones conocidas al 16-11, en protoboard** (antes de la placa propia; confirmar con el usuario si cambió algo):
 
 - **Piernas en el MD-BTS7960:** RPWM a GPIO 26, LPWM a GPIO 27, R_EN y L_EN a 3.3 V, VCC a 3V3 y GND al GND del ESP32. Los 2 actuadores en paralelo: M+ a sus cables A y M− a sus cables B. R_IS y L_IS sin conectar (pueden pasar de 3.3 V). En estas placas el GND de control y B− suelen estar unidos: comprobarlo con el multímetro.
 - **Cabeza en el L298N** (provisional, aguanta unos 2 A por canal): IN1 a GPIO 18, IN2 a GPIO 19, jumper de ENA puesto, OUT1 y OUT2 al actuador. 12 V con fusible de 3 A; GND a V− y al GND del ESP32; el 5V sin conectar, con el jumper del regulador puesto. Revisar que traiga sus 8 diodos y tocar el disipador al probar.
@@ -310,18 +346,23 @@ Detener un rato: `sudo systemctl stop camilla-pagina camilla-red` (al reiniciar 
 **Finales de carrera** (microswitch de 3 patas C, NO y NC; se usa **C a GND y NC al GPIO**, así un cable cortado también para):
 
 - Piernas: 17 arriba (al extender) y 16 abajo (al retraer), en `main.py`. Montados por el compañero; falta pasarlos a esos pines y probarlos.
-- Cabeza: 23 arriba y 32 abajo, previstos y sin código. Falta confirmar que en la cabeza extender = subir.
+- Cabeza: 4 arriba y 32 abajo (los de la placa; antes se pensaba en 23 para arriba), sin código. Falta confirmar que en la cabeza extender = subir.
 - Altura: no lleva (decisión del 24-11).
 - El código del compañero (`compi.txt`, por WiFi) los tenía en 32 y 33; 33 es DIR de la altura.
 
-**Sensor de ángulo de piernas (24-11, sin decidir):** la bisagra es un tubo hueco de 16.5 mm por fuera y 13.7 mm por dentro, que gira con las piernas. Los cojines se juntan justo encima y la sección termina al ras del extremo del tubo. El módulo AS5600 (23 × 23 mm, imán de 3.5 mm) no cabe: rozaría con la sección al bajarla o quedaría salido para patearlo.
+**Sensor de ángulo de piernas (24-11; MPU6050 elegido y probado en la mesa el 26-11):** la bisagra es un tubo hueco de 16.5 mm por fuera y 13.7 mm por dentro, que gira con las piernas. Los cojines se juntan justo encima y la sección termina al ras del extremo del tubo. El módulo AS5600 (23 × 23 mm, imán de 3.5 mm) no cabe: rozaría con la sección al bajarla o quedaría salido para patearlo.
 
-- Recomendado: **MPU6050 (GY-521)** en una cajita impresa debajo de la sección de piernas (cualquier parte que gire con ella), por I2C en 21 y 22. Mide contra la gravedad y no se gasta. Hay que comprarlo; código nuevo.
+- Elegido: **MPU6050 (GY-521)** debajo de la sección de piernas (cualquier parte que gire con ella), por I2C en 21 y 22. Mide contra la gravedad y no se gasta.
+  - **Prueba del 26-11:** primer GY-521 en la mesa, desde la PC por COM4. Dio `[104]` y WHO_AM_I `0x68` (original), con 40 lecturas sin error que siguen la inclinación. La gravedad mide entre 15 200 y 16 100 (1 g = 16 384).
+  - **Montaje:** parado, atornillado a un soporte impreso que cuelga de la sección de piernas (tubo negro que sube con los actuadores). Con X vertical, la bisagra queda paralela a Y o a Z según cómo se gire el soporte.
+  - **Calibración prevista:** dos posiciones desde la página (plano y subido unos 30°), solo para admin. El ESP32 calcula el eje de la bisagra y guarda la calibración en un archivo propio. Se trabaja en la rama `mpu-angulos`.
 - Si tiene que ir en la bisagra: **potenciómetro RV09** (9 mm) con su eje en un tapón impreso dentro del tubo y el cuerpo fijo al asiento. Dura unos 10 000 a 15 000 ciclos; uno de plástico conductivo (Bourns 3382 o similar) dura mucho más. Va a 34, 36 o 39.
 
 **Definitivo (aprobado):** un MD-BTS7960 (43 A, 5.5 a 25 V) por sección, con los dos actuadores en paralelo.
 
-- Fusible retardado, uno por módulo, en B+: Cabeza 7.5 A y Piernas 10 A, de vidrio 6 × 30 mm, con portafusible en línea de 15 A o más. Si se funde, paran los dos actuadores juntos.
+- Fusible retardado, uno por módulo, en B+, de vidrio de 6 × 30 mm, con portafusible en línea de 15 A o más. Si se funde, paran los dos actuadores juntos.
+  - **Cabeza: 7 A.** Se planeó 7.5 A, pero solo se consiguió de 7 A (26-11). Sirve porque los 2 actuadores piden como máximo 6 A. Comprobar que sea retardado (marca T). Si es rápido y se funde al arrancar sin nada trabado, cambiarlo por uno retardado.
+  - **Piernas: 10 A.** No usar 7 A: los 2 actuadores piden unos 8 A.
 - Cable de 14 AWG para B+ y B−, y de 16 AWG a los actuadores.
 - Sin TVS al principio: no hay contactos que chispeen y el módulo trae diodos internos.
 - Si EN va a un GPIO, resistencia de 10 kΩ de EN a GND, para que quede apagado mientras arranca el ESP32.
@@ -329,16 +370,18 @@ Detener un rato: `sudo systemctl stop camilla-pagina camilla-red` (al reiniciar 
 
 **Relés (solo historia):** el módulo de 4 relés SPDT se usó el 09-11. El firmware conserva `MODULO = "reles"` (cabeza con 26/27 y 25/33, activo en bajo). No sirve a la vez que los puentes, porque comparte pines.
 
-**Pines del ESP32:**
+**Pines del ESP32** (los de la placa propia, y los de `main.py` desde el 26-11):
 
 | Uso | GPIO |
 |---|---|
-| Ocupados | 26, 27 (piernas); 18, 19 (cabeza); 25, 33, 13 (altura); 17, 16 (finales de piernas); 2 (LED); 1 y 3 (USB con la Raspberry) |
-| Reservados | 23 y 32: finales de la cabeza. 21 y 22: I2C (MPU6050). 34, 36 o 39: potenciómetro, si se usa |
-| Libres | 4, 14 (da pulsos al arrancar), 35, y los de 34/36/39 que no se usen. Del 34 al 39 son solo de entrada y no tienen resistencia interna (un final ahí necesita 10 kΩ a 3.3 V). En la WROVER, 16 y 17 no están libres: la placa es WROOM. |
+| Ocupados | 13 y 27 (piernas); 18 y 19 (cabeza); 25, 33 y 26 (altura: STEP, DIR y EN); 17 y 16 (finales de piernas); 4 y 32 (finales de cabeza); 21 SDA y 22 SCL (los dos MPU6050); 2 (LED); 1 y 3 (USB con la Raspberry) |
+| Reservados | 34, 36 o 39: potenciómetro, si se usa |
+| Libres | 14 (da pulsos al arrancar), 23, 35, y los de 34/36/39 que no se usen. Del 34 al 39 son solo de entrada y no tienen resistencia interna (un final ahí necesita 10 kΩ a 3.3 V). En la WROVER, 16 y 17 no están libres: la placa es WROOM. |
 | No usar | 6 a 11 (memoria). Evitar 0, 5, 12 y 15, que son de arranque. |
 
-**Lista de compra pendiente:** fusibles 6 × 30 mm retardados (3 de 7.5 A y 3 de 10 A), 2 portafusibles en línea de 15 A o más, 2 resistencias de 10 kΩ, 2 BTS7960 y cable de 14 y 16 AWG. De la tienda **no sirven**: TVS de 3.3, 5, 9 o 12 V (conducen a 12 V y queman el fusible), SMBJ170CA y 1.5KE200CA (no actúan), SM12C (es para datos), ni un 1N4007 entre los cables del actuador (hace corto al invertir).
+**Fusibles conseguidos (26-11):** 7 A (cabeza), 10 A (piernas) y 3 A (J4 de la placa), de vidrio.
+
+**Lista de compra pendiente:** 2 portafusibles en línea de 15 A o más, más uno para el fusible de J4, 2 resistencias de 10 kΩ, 2 BTS7960 y cable de 14 y 16 AWG. De la tienda **no sirven**: TVS de 3.3, 5, 9 o 12 V (conducen a 12 V y queman el fusible), SMBJ170CA y 1.5KE200CA (no actúan), SM12C (es para datos), ni un 1N4007 entre los cables del actuador (hace corto al invertir).
 
 ## 9. Problemas conocidos
 
@@ -378,18 +421,18 @@ Detener un rato: `sudo systemctl stop camilla-pagina camilla-red` (al reiniciar 
 **Decisiones del usuario:**
 
 1. **Pantalla sin sensores:** seguir con grados estimados, pasar a SUBIENDO / BAJANDO / EN REPOSO, o poner sensores. En cualquier caso hay que decidir qué pasa con "Ir a", "Plano 0°" y los textos de 1°.
-2. **Sensor de ángulo de piernas:** MPU6050 bajo la sección (recomendado) o potenciómetro en la bisagra (sección 8). El AS5600 no cabe en la bisagra. Historia: el 11-11 se pensó en un encoder óptico en código Gray (rama `backup-cambios-esp32`) y el 20-11 en dos AS5600 (rama `manuales`); análisis viejo en `git show 1eaf7a2:CONTEXTO.md`.
+2. **Sensor de ángulo de piernas:** decidido el MPU6050 bajo la sección (sección 8); falta el código (rama `mpu-angulos`). El AS5600 no cabe en la bisagra. Historia: el 11-11 se pensó en un encoder óptico en código Gray (rama `backup-cambios-esp32`) y el 20-11 en dos AS5600 (rama `manuales`); análisis viejo en `git show 1eaf7a2:CONTEXTO.md`.
 3. **Perfiles:** registro abierto o que los cree el administrador.
 4. **Registro de uso:** solo cuentas y pacientes, o también un historial de quién movió la camilla y cuándo.
 5. **Altura:** qué husillo lleva (mm por vuelta) y si el NEMA 17 aguanta la camilla con una persona. Como no lleva finales, el husillo tiene que aguantar llegar a su extremo, o hay que soltar a tiempo. Si no, NEMA 23 con reductor o actuador lineal con BTS7960. Si el husillo no es autobloqueante (paso largo, como T8×8), la camilla baja sola al cortar la energía: hace falta husillo de paso fino, freno o reductor.
 6. Si se deja la sección 11 de `INTEGRACION.md` en un documento que se va a evaluar.
-7. **Cabeza:** confirmar que extender = subir, para sus finales en 23 y 32.
+7. **Cabeza:** confirmar que extender = subir, para sus finales en 4 y 32.
 
 **Software que se puede hacer ya:**
 
 - Arreglo del paro (propuesta en la sección 13).
 - Mostrar `final_piernas` en la página (hoy el servidor lo ignora): aviso "Piernas en el tope" y botón deshabilitado hacia ese lado.
-- Finales de la cabeza en `main.py` (23 y 32), igual que piernas, cuando se confirme la dirección.
+- Finales de la cabeza en `main.py` (4 arriba y 32 abajo), igual que piernas, cuando se confirme la dirección.
 - Tiempo máximo de marcha por sección en el ESP32, sobre todo en la altura, que no tiene finales.
 - Corregir los manuales (AS5600 y finales de la altura ya no van).
 - Textos de la pantalla que no corresponden.
@@ -400,6 +443,12 @@ Detener un rato: `sudo systemctl stop camilla-pagina camilla-red` (al reiniciar 
 
 **Hardware:**
 
+- Placa propia, en este orden:
+  1. Imprimir la plantilla 1:1 y comprobar el ESP32 y el DRV8825.
+  2. Fresar.
+  3. Revisar con el multímetro, sin piezas, que ninguna pista suene con su vecina y que 3V3 y VMOT no suenen con GND.
+  4. Soldar.
+  5. Cargar el `main.py` con los pines nuevos y encender por partes (guía en la sección 14).
 - Pasar los finales de piernas a 17 y 16 (C a GND, NC al GPIO), cargar `main.py` y probar: al arrancar debe decir `# finales de piernas: no`.
 - BTS7960 de Cabeza y su segundo actuador.
 - Paro físico: hongo con contactor que corte la fuente de motores.
@@ -461,7 +510,7 @@ sudo systemctl stop camilla-pagina 2>/dev/null; pkill -f servidor.py
 sudo systemctl start camilla-pagina
 ```
 
-**Cargar el ESP32 con Thonny** (también está en la Raspberry):
+**Cargar el ESP32 con Thonny** (también está en la Raspberry). En la PC del usuario, el controlador CP210x se instaló el 26-11 y el ESP32 aparece en COM4. En Thonny, el intérprete es "MicroPython (ESP32)":
 
 1. Apagar el servidor: Thonny y el servidor no pueden usar el USB a la vez.
 2. Intérprete MicroPython (ESP32) y Stop hasta ver `>>>`.
@@ -543,6 +592,8 @@ Privadas de la cuenta del usuario. Algunas muestran planes viejos (por ejemplo, 
 - Stepper de la altura (DRV8825, Vref, micropasos; sin finales y solo con `main.py` desde el 24-11): https://claude.ai/artifact/AW9F4AJEpPeUgS7757k2Cr
 - Montaje del AS5600 (supone un perno con tuerca; la bisagra real es un tubo, así que no aplica): https://claude.ai/artifact/DwFKWLFjFtK2hQHj96AAH7
 - Puente H de las piernas (BTS7960 con 2 actuadores): https://claude.ai/artifact/1vXRyzqTNfADsvsiMQrvpW
+- Placa propia del ESP32 (mapa de la placa, fuente de 12 V con simulador de corriente y guía de conexión paso a paso): https://claude.ai/artifact/6wx6oaaJUZ4oKGFcfhMcZv
+- Imagen de los pines que cambian con la placa: `placa-camilla/cambios-pines.png`, en el escritorio del usuario.
 
 ## 15. Para la próxima Claude
 
