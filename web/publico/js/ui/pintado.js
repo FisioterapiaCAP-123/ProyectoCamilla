@@ -145,6 +145,18 @@ function pintarAltura() {
   porId('textoAltura').textContent = 'Mantén presionado hasta alcanzar la altura deseada. ' +
     (conSensor('altura') ? 'La barra muestra la posición real, entre los topes.' : 'El recorrido es aproximado.');
 
+  // "Volver al centro sola": la cuenta atras y la vuelta, para todos; quedarse, solo quien la provoca
+  const v = panel.vuelta;
+  const hayVuelta = Boolean(a) && (v.volviendo || v.en !== null);
+  porId('vueltaAltura').classList.toggle('d-none', !hayVuelta);
+  if (hayVuelta) {
+    const texto = v.volviendo ? 'Volviendo sola al centro…' : `Vuelve sola al centro en ${v.en} s.`;
+    if (porId('vueltaTexto').textContent !== texto) porId('vueltaTexto').textContent = texto;
+    const quedarse = porId('btnQuedarseAltura');
+    quedarse.classList.toggle('d-none', !(sesion.rol === 'dev' && control.soyYo));
+    quedarse.disabled = !enLinea;
+  }
+
   if (!dev && panel.pasosAbiertos) panel.pasosAbiertos = false;
   porId('btnPasosAltura').classList.toggle('d-none', !dev || panel.pasosAbiertos);
   const caja = porId('pasosAltura');
@@ -165,7 +177,10 @@ function pintarAltura() {
   porId('pasosMin').textContent = topes.abajo !== null ? 'tope ' + topes.abajo : 'sin tope abajo';
   porId('pasosMax').textContent = topes.arriba !== null ? 'tope +' + topes.arriba : 'sin tope arriba';
 
-  const listo = enLinea && !estaMoviendo('altura') && modo === 'auto';
+  const volver = porId('volverAltura');
+  volver.checked = v.activa;
+  volver.disabled = !enLinea;
+  const listo = enLinea && !estaMoviendo('altura') && !v.volviendo && modo === 'auto';
   caja.querySelector('[data-altura="centro"]').disabled = !listo;
   caja.querySelector('[data-altura="arriba"]').disabled = !listo || !centro || pasos < 1;
   caja.querySelector('[data-altura="abajo"]').disabled = !listo || !centro || pasos > -1;

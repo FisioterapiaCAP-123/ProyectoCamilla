@@ -77,8 +77,9 @@ export const SERVIDOR = {
   //   -> {ok:true} o {ok:false, mensaje:"..."}; el resultado se ve en hardware.sensores
   calibrar(seccion, posicion) { return enviarControl('/api/calibrar', { seccion, posicion }); },
 
-  // POST /api/altura {accion:"centro"|"arriba"|"abajo"|"borrar"|"manual"|"auto"}   solo perfil Desarrollador:
-  //   pasos del motor de la altura (centro y topes) o su modo (manual = pedal)
+  // POST /api/altura {accion:"centro"|"arriba"|"abajo"|"borrar"|"manual"|"auto"|"volver_si"|"volver_no"|"cancelar_vuelta"}
+  //   solo perfil Desarrollador: pasos del motor de la altura (centro y topes), su modo (manual = pedal),
+  //   el interruptor "Volver al centro sola" o quedarse donde esta (cancela la cuenta atras o la vuelta)
   //   -> {ok:true} o {ok:false, mensaje:"..."}; el resultado se ve en hardware.altura
   altura(accion) { return enviarControl('/api/altura', { accion }); }
 };

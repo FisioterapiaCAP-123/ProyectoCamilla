@@ -40,7 +40,7 @@ class Simulador:
     RANGO = {"cabeza": (-30.0, 70.0), "piernas": (0.0, 45.0)}
     CALIBRACION_MINIMA = 15  # grados, igual que en esp32/main.py
 
-    PASOS_POR_SEGUNDO = 800  # altura: un poco menos que los 1000 del ESP32, por la rampa
+    PASOS_POR_SEGUNDO = 450  # altura: un poco menos que los 500 del ESP32, por la rampa
     PASOS_FISICOS = (-5000, 5000)  # donde se trabaria la altura simulada
 
     def __init__(self):
@@ -66,6 +66,11 @@ class Simulador:
             minimo, maximo = self.RANGO[seccion]
             cambio = direccion * self.GRADOS_POR_SEGUNDO[seccion] * (ahora - desde)
             self.real[seccion] = max(minimo, min(maximo, self.real[seccion] + cambio))
+        elif seccion == "altura" and direccion == 0:  # M altura 0: va sola al centro y para ahi
+            a = self.altura
+            if a["centro"] and not a["manual"]:
+                andado = self.PASOS_POR_SEGUNDO * (ahora - desde)
+                a["pasos"] = max(0.0, a["pasos"] - andado) if a["pasos"] > 0 else min(0.0, a["pasos"] + andado)
         elif seccion == "altura" and not self.altura["manual"]:
             a = self.altura
             minimo, maximo = self.PASOS_FISICOS
@@ -232,6 +237,7 @@ class Esp32Serial:
         return self.vivo() and seccion in self.secciones
 
     def mover(self, seccion, direccion):
+        """direccion 1 o -1; ("altura", 0) = vuelve sola al centro (M altura 0)."""
         with self.bloqueo:
             cambio = self.orden != (seccion, direccion)
             self.orden = (seccion, direccion)

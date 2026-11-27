@@ -19,6 +19,9 @@ export const panel = {
      topes: {abajo: -4000|null, arriba: 3800|null}, modo: 'auto'|'manual'}, o null si no los informa */
   altura: null,
   pasosAbiertos: false,  // panel "Pasos" de la altura abierto (solo perfil Desarrollador)
+  /* "Volver al centro sola" (lo prende el perfil Desarrollador): activa = el interruptor,
+     volviendo = la altura va sola al centro, en = segundos que faltan para que vuelva (o null) */
+  vuelta: { activa: false, volviendo: false, en: null },
   paroPedidoEn: 0     // lo que diga el servidor del paro se ignora un momento tras pulsarlo, para que no parpadee
 };
 

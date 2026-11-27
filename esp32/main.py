@@ -26,7 +26,7 @@ Pasos de la altura: el ESP32 cuenta los pasos que da el NEMA (+ hacia arriba, 0 
 y los guarda en altura.json cada vez que para, junto con los topes y el modo. Desde la
 pagina (perfil Desarrollador): con la altura en el centro, "centro" pone la cuenta en 0;
 despues se guarda el tope de arriba y el de abajo donde esta ahora. Con el centro puesto,
-la altura frena a PASOS_INICIO al acercarse a un tope y no pasa de el. Si se corta la luz
+la altura frena a ALTURA_LENTO_VELOCIDAD al acercarse a un tope y no pasa de el. Si se corta la luz
 en marcha, al volver la cuenta no vale ("sin centro") hasta poner el centro otra vez.
 Modo manual: la altura se mueve con el pedal de la camilla. El NEMA queda suelto (EN = 1),
 no obedece ordenes y la cuenta deja de valer: al volver a automatico hay que poner el centro.
@@ -50,6 +50,8 @@ La calibracion queda en calibracion.json, en la memoria del ESP32.
 
 Ordenes que recibe, una por linea, terminadas en *XX (comprobacion en hexadecimal):
     M piernas 1        mover la seccion: 1 extiende, -1 retrae. Se debe repetir cada 200 ms
+    M altura 0         la altura va sola al centro (paso 0) y para ahi; con centro y en automatico.
+                       Tambien se repite cada 200 ms
     S piernas          detener esa seccion
     X                  detener todo
     P                  la Raspberry sigue conectada
@@ -103,12 +105,15 @@ ALTURA_STEP = 25            # altura, DRV8825: STP (cada pulso es un paso)
 ALTURA_DIR = 33             # altura, DRV8825: DIR
 ALTURA_EN = 26              # altura, DRV8825: EN (0 = con fuerza, 1 = suelto; antes 13)
 SUBIR_CON_DIR = 1           # altura: si "Subir" baja, cambiar a 0
-PASOS_VELOCIDAD = 1000      # altura: pasos por segundo a toda velocidad (5 vueltas/s en paso completo,
-                            #         casi el maximo de un NEMA 17 a 12 V). Si zumba o salta pasos: 800 o 600
+PASOS_VELOCIDAD = 500       # altura: pasos por segundo a toda velocidad (2.5 vueltas/s en paso completo).
+                            #         Hasta el 26-11 era 1000 (5 vueltas/s): iba demasiado rapido
 PASOS_INICIO = 250          # altura: a esta velocidad arranca; mas rapido de golpe no arranca con carga
 PASOS_ACELERACION = 1500    # altura: cuanto sube la velocidad cada segundo (llega al maximo en 0.5 s)
 MANTENER_FUERZA = True      # altura: detenido, el motor sigue sujetando (se calienta)
-ALTURA_LENTO_PASOS = 400    # altura: a menos de estos pasos de un tope frena a PASOS_INICIO
+ALTURA_LENTO_PASOS = 100    # altura: a menos de estos pasos de un tope frena a ALTURA_LENTO_VELOCIDAD
+                            #         (de 500 a 50 frena en unos 83 pasos: con menos de 90 llega rapido al tope)
+ALTURA_LENTO_VELOCIDAD = 50  # altura: pasos por segundo cerca de un tope (o del centro si vuelve sola),
+                            #         y siempre si hay topes pero no centro. 27-11: de 250 a 120 y luego a 50
 ARCHIVO_ALTURA = "altura.json"   # pasos, topes y modo de la altura: cargar main.py no lo borra
 PIERNAS_MPU = 0x68          # piernas: direccion de su MPU6050 (AD0 a GND); None si no esta conectado
 PIERNAS_SCL = 21            # piernas: su propio I2C (placa J7)
@@ -185,6 +190,8 @@ class Stepper:
         self.centro = False     # la cuenta vale: se puso el centro y nada la movio por fuera
         self.topes = {"abajo": None, "arriba": None}    # en pasos; None = sin ese tope
         self.manual = False     # se mueve con el pedal: suelto y sin ordenes
+        self.objetivo = None    # paso al que va sola (M altura 0: el centro); None = la mueve el boton
+        self.vuelta = None      # "a" o "b": hacia donde va mientras vuelve sola al centro
         self.cargar()
         self.step = salida_pwm(pin_step, PASOS_INICIO)
         self.dir = Pin(pin_dir, Pin.OUT, value=0)
@@ -250,35 +257,43 @@ class Stepper:
         if self.centro:
             self.guardar(moviendo=True)     # si se corta la luz en marcha, al volver no vale
         time.sleep_ms(1)    # el driver necesita un momento tras cambiar DIR o EN
-        self.poner_velocidad(min(PASOS_INICIO, PASOS_VELOCIDAD))
+        inicio = min(PASOS_INICIO, PASOS_VELOCIDAD)
+        self.poner_velocidad(min(inicio, ALTURA_LENTO_VELOCIDAD) if self.lento() else inicio)
 
     def lento(self):
-        """Va a la velocidad de arranque cerca del tope hacia donde va, o si hay topes
-        pero la cuenta no vale (sin centro)."""
+        """Va a la velocidad de arranque cerca del tope hacia donde va (o del centro, si vuelve
+        sola), o si hay topes pero la cuenta no vale (sin centro)."""
         if not self.centro:
             return self.topes["abajo"] is not None or self.topes["arriba"] is not None
         tope = self.topes["arriba"] if self.sentido > 0 else self.topes["abajo"]
-        return tope is not None and abs(tope - self.pasos) < ALTURA_LENTO_PASOS
+        return any(limite is not None and abs(limite - self.pasos) < ALTURA_LENTO_PASOS
+                   for limite in (tope, self.objetivo))
 
     def en_tope(self, cual):
-        """No puede ir hacia "a" (arriba) o "b" (abajo): en manual, o con el tope alcanzado."""
+        """No puede ir hacia "a" (arriba) o "b" (abajo): en manual, con el tope alcanzado
+        o, si vuelve sola, al llegar al centro."""
         if self.manual:
             return True
         if not self.centro:
             return False
         self.contar()
+        if self.objetivo is not None and (self.pasos >= self.objetivo if cual == "a" else self.pasos <= self.objetivo):
+            return True
         if cual == "a":
             return self.topes["arriba"] is not None and self.pasos >= self.topes["arriba"]
         return self.topes["abajo"] is not None and self.pasos <= self.topes["abajo"]
 
     def actualizar(self, ahora):
-        """Rampa: acelera hasta PASOS_VELOCIDAD y frena a PASOS_INICIO cerca de un tope."""
+        """Rampa: acelera hasta PASOS_VELOCIDAD y frena a ALTURA_LENTO_VELOCIDAD cerca de un tope."""
         self.contar()
         if self.velocidad == 0:
             return
-        objetivo = min(PASOS_INICIO, PASOS_VELOCIDAD) if self.lento() else PASOS_VELOCIDAD
+        objetivo = min(ALTURA_LENTO_VELOCIDAD, PASOS_VELOCIDAD) if self.lento() else PASOS_VELOCIDAD
         if objetivo == FRECUENCIA_PWM:
             objetivo += 1
+        if self.velocidad == objetivo:
+            self.cambio = ahora     # a velocidad pareja la rampa no acumula tiempo: si no, al frenar caeria de golpe
+            return
         cambio = PASOS_ACELERACION * time.ticks_diff(ahora, self.cambio) / 1000
         if self.velocidad < objetivo:
             nueva = min(objetivo, int(self.velocidad + cambio))
@@ -461,6 +476,9 @@ class Seccion:
     def detener(self):
         self.pedido = None
         self.apagar_reles()
+        for par in self.pares:      # la altura deja de volver sola al centro
+            if hasattr(par, "objetivo"):
+                par.objetivo = None
 
     def mover(self, cual, ahora):
         self.visto = ahora
@@ -574,6 +592,20 @@ def ajustar_altura(accion):
     ALTURA.guardar()
 
 
+def volver_al_centro(ahora):
+    """M altura 0: va sola hacia el paso 0 y se detiene ahi, como en un tope. Solo con centro y
+    en automatico. La Raspberry la repite cada 200 ms: sin ella, para igual que con M."""
+    if ALTURA is None or ALTURA.manual or not ALTURA.centro:
+        return
+    ALTURA.contar()
+    if ALTURA.objetivo is None:     # primera orden de esta vuelta: el sentido queda fijo
+        if abs(ALTURA.pasos) < 1:
+            return                  # ya esta en el centro
+        ALTURA.objetivo = 0
+        ALTURA.vuelta = "b" if ALTURA.pasos > 0 else "a"
+    SECCIONES["altura"].mover(ALTURA.vuelta, ahora)
+
+
 def texto_altura():
     """Las partes de la linea E con los pasos de la altura."""
     ALTURA.contar()
@@ -623,7 +655,11 @@ def procesar(linea, ahora):
     partes = texto.split(" ")
     orden = partes[0]
     if orden == "M" and len(partes) == 3 and partes[1] in SECCIONES and partes[2] in DIRECCIONES:
+        if partes[1] == "altura" and ALTURA is not None:
+            ALTURA.objetivo = None      # el boton manda: deja de volver sola al centro
         SECCIONES[partes[1]].mover(DIRECCIONES[partes[2]], ahora)
+    elif orden == "M" and len(partes) == 3 and partes[1] == "altura" and partes[2] == "0":
+        volver_al_centro(ahora)
     elif orden == "S" and len(partes) == 2 and partes[1] in SECCIONES:
         SECCIONES[partes[1]].detener()
     elif orden == "X" and len(partes) == 1:

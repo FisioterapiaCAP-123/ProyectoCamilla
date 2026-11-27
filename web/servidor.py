@@ -1,5 +1,6 @@
 import collections
 import json
+import math
 import re
 import secrets
 import sys
@@ -20,6 +21,11 @@ IP_RED = "10.42.0.1"  # IP de la Raspberry en su propia red WiFi "Camilla"
 TIEMPO_LIBERAR = 10  # segundos sin noticias de quien tiene el control para liberarlo (la pagina consulta cada 300 ms)
 ESPERA_SOLICITUD = 35  # segundos que dura un pedido de control sin respuesta (las paginas cuentan 30)
 HOMBRE_MUERTO = 1.0  # segundos sin "mover" para parar un motor continuo (la pagina lo repite mientras se mantiene el boton)
+# "Volver al centro sola" (interruptor del perfil Desarrollador): la altura vuelve al paso 0
+VUELTA_ESPERA = 7  # segundos desde la ultima pulsacion de un boton (hasta el 27-11, 5)
+VUELTA_CENTRO = 3  # a esta distancia del 0 (en pasos) ya esta en el centro
+VUELTA_TRABADA = 2.0  # segundos sin que cambien los pasos: se cancela
+VUELTA_MAXIMA = 120  # segundos: una vuelta mas larga se cancela
 SESION_HORAS = 12  # una sesion que no se usa en este tiempo se borra
 IP_CON_SESION = 60 * 60  # el reparto de IP de la red Camilla dura 60 min: antes nadie mas puede tener esa IP
 # Como preguntan los celulares si hay internet, y la respuesta que significa "si"
@@ -101,6 +107,9 @@ class Camilla:
         self.respuestas = {}  # token de quien pidio el control -> {"aceptada", "usuario"}: se entrega una vez
         self.paro = False  # paro de emergencia: lo puede activar o liberar cualquiera
         self.motor = None  # motor continuo en marcha: {"seccion", "dir", "visto"}
+        self.volver_altura = False  # interruptor del desarrollador: la altura vuelve sola al centro (al arrancar, apagado)
+        self.ultima_pulsacion = None  # ultimo boton (mover o ajuste de la altura): desde ahi cuenta VUELTA_ESPERA
+        self.volviendo = None  # {"desde", "pasos", "visto"} mientras la altura vuelve sola al centro
         self.hardware = hardware.Simulador()  # al arrancar, servidor.py pone aqui el ESP32
 
     # ---------- sesiones ----------
@@ -232,13 +241,21 @@ class Camilla:
     def parar_motores(self, motivo):
         if self.motor:
             anotar(f"motor {self.motor['seccion']} parado ({motivo})")
+        if self.volviendo:
+            anotar(f"la altura dejo de volver al centro ({motivo})")
+            self.ultima_pulsacion = None  # para volver otra vez hace falta otro boton
         self.motor = None
+        self.volviendo = None
         self.hardware.parar()
 
     def mover(self, usuario, seccion, direccion):
         """Arranca un motor continuo. La pagina repite la orden mientras se mantiene el boton."""
         if not self.puede_mover(usuario, seccion):
             return False, None  # se descarta en silencio
+        self.ultima_pulsacion = time.monotonic()
+        if self.volviendo:  # el boton manda: la nueva orden reemplaza a "M altura 0"
+            anotar(f"la altura dejo de volver al centro ({usuario} toco un boton)")
+            self.volviendo = None
         if not self.motor or (self.motor["seccion"], self.motor["dir"]) != (seccion, direccion):
             anotar(f"{usuario}: {seccion} {'sube' if direccion > 0 else 'baja'}" + (" (simulado)" if self.hardware.simulado else ""))
         self.motor = {"seccion": seccion, "dir": direccion, "visto": time.monotonic()}
@@ -284,6 +301,8 @@ class Camilla:
         a = self.altura()
         if a is None:
             return False, "El ESP32 no informa los pasos de la altura (¿main.py viejo o sin el motor?)."
+        if accion != "manual" and self.volviendo:
+            return False, "Espera a que la altura termine de volver al centro."
         if accion != "manual" and self.motor and self.motor["seccion"] == "altura":
             return False, "Detén la altura antes."
         if accion in ("centro", "arriba", "abajo", "borrar") and a["modo"] == "manual":
@@ -294,14 +313,93 @@ class Camilla:
             return False, "El tope de arriba tiene que quedar arriba del centro."
         if accion == "abajo" and a["pasos"] > -1:
             return False, "El tope de abajo tiene que quedar abajo del centro."
-        if accion == "manual" and self.motor and self.motor["seccion"] == "altura":
+        if accion == "manual" and ((self.motor and self.motor["seccion"] == "altura") or self.volviendo):
             self.parar_motores("la altura pasa a manual")
+        self.ultima_pulsacion = time.monotonic()
         self.hardware.ajustar_altura(accion)
         que = {"centro": "puso el centro de la altura", "arriba": f"guardo el tope de arriba en {a['pasos']} pasos",
                "abajo": f"guardo el tope de abajo en {a['pasos']} pasos", "borrar": "borro los topes de la altura",
                "manual": "paso la altura a manual (pedal)", "auto": "paso la altura a automatico"}[accion]
         anotar(f"{usuario} {que}" + (" (simulado)" if self.hardware.simulado else ""))
         return True, None
+
+    # ---------- la altura vuelve sola al centro ----------
+    def rol_titular(self):
+        return next((s["rol"] for s in self.sesiones.values() if s["usuario"] == self.titular), None)
+
+    def cambiar_volver(self, usuario, activo):
+        """Interruptor "Volver al centro sola": solo el perfil Desarrollador (lo revisa accion_altura)."""
+        if activo != self.volver_altura:
+            anotar(f"{usuario} {'prendio' if activo else 'apago'} la vuelta sola al centro de la altura")
+        self.volver_altura = activo
+        if activo:
+            self.ultima_pulsacion = time.monotonic()  # prenderlo cuenta como pulsar un boton
+        elif self.volviendo:
+            self.terminar_vuelta(f"la altura dejo de volver al centro ({usuario} apago la vuelta sola)")
+        return True, None
+
+    def cancelar_vuelta(self, usuario):
+        """"Detener aquí": corta la vuelta, o la cuenta atras, hasta el proximo boton."""
+        if self.volviendo:
+            self.terminar_vuelta(f"la altura dejo de volver al centro ({usuario} la detuvo)")
+        elif self.ultima_pulsacion is not None:
+            self.ultima_pulsacion = None
+            anotar(f"{usuario} dejo la altura donde estaba (no vuelve al centro)")
+        return True, None
+
+    def vuelta_posible(self):
+        """La altura puede volver sola: interruptor prendido, un desarrollador con el control, sin paro,
+        ningun motor por boton, y la altura en automatico, con centro y fuera de el."""
+        a = self.altura()
+        return bool(self.volver_altura and self.titular and self.rol_titular() == "dev" and not self.paro
+                    and not self.motor and a and a["modo"] == "auto" and a["centro"]
+                    and abs(a["pasos"]) > VUELTA_CENTRO and self.hardware.disponible("altura"))
+
+    def espera_vuelta(self, t):
+        """Segundos que faltan para que la altura vuelva sola al centro, o None si no va a volver."""
+        if self.volviendo or self.ultima_pulsacion is None or not self.vuelta_posible():
+            return None
+        return max(0.0, VUELTA_ESPERA - (t - self.ultima_pulsacion))
+
+    def terminar_vuelta(self, texto):
+        self.volviendo = None
+        self.ultima_pulsacion = None  # una vuelta por pulsacion: sin esto, un paso de mas la haria volver otra vez
+        self.hardware.parar()
+        anotar(texto)
+
+    def atender_vuelta(self, t):
+        """Desde vigilar(): empieza la vuelta al cumplirse la espera, y la sigue hasta el centro."""
+        if not self.volviendo:
+            espera = self.espera_vuelta(t)
+            if espera is not None and espera <= 0:
+                pasos = self.altura()["pasos"]
+                self.volviendo = {"desde": t, "pasos": pasos, "inicio": pasos, "visto": t}
+                anotar(f"la altura vuelve sola al centro desde {pasos} pasos" + (" (simulado)" if self.hardware.simulado else ""))
+                self.hardware.mover("altura", 0)  # el ESP32 elige el sentido y para en el 0
+            return
+        a = self.altura()
+        v = self.volviendo
+        if not a or not self.hardware.disponible("altura"):
+            motivo = "se perdio la conexion con el ESP32"
+        elif self.titular is None or self.rol_titular() != "dev":
+            motivo = "el control ya no es de un desarrollador"
+        elif a["modo"] != "auto" or not a["centro"]:
+            motivo = "la altura quedo sin centro"
+        elif abs(a["pasos"]) <= VUELTA_CENTRO or a["pasos"] * v["inicio"] < 0:
+            self.terminar_vuelta(f"la altura llego al centro ({a['pasos']} pasos)")
+            return
+        elif a["pasos"] != v["pasos"]:
+            v.update(pasos=a["pasos"], visto=t)
+            motivo = "tardo demasiado" if t - v["desde"] > VUELTA_MAXIMA else None
+        else:
+            motivo = "no avanza" if t - v["visto"] > VUELTA_TRABADA else None
+        if motivo:
+            self.terminar_vuelta(f"la altura dejo de volver al centro ({motivo})")
+
+    def estado_vuelta(self, t):
+        espera = self.espera_vuelta(t)
+        return {"activa": self.volver_altura, "volviendo": bool(self.volviendo),
+                "en": None if espera is None else math.ceil(espera)}
 
     def cambiar_paro(self, activo, quien):
         if activo != self.paro:
@@ -322,6 +420,7 @@ class Camilla:
             "esp32": self.hardware.depuracion(),
             "sensores": self.hardware.estado().get("sensores", {}),
             "altura": self.altura(),
+            "vuelta": dict(self.estado_vuelta(t), detalle=dict(self.volviendo) if self.volviendo else None),
             "motor": motor,
             "titular": self.titular,
             "paro": self.paro,
@@ -346,6 +445,8 @@ class Camilla:
             "paro": self.paro,
             "simulacion": self.hardware.simulado,
             "hardware": equipo,
+            # "Volver al centro sola": {activa, volviendo, en (segundos que faltan o None)}
+            "vuelta_altura": self.estado_vuelta(time.monotonic()),
             # el pedido de control solo le llega a quien tiene el control
             "solicitud": ({"id": self.solicitud["id"], "usuario": self.solicitud["nombre"]}
                           if self.solicitud and usuario and usuario == self.titular else None),
@@ -369,6 +470,7 @@ class Camilla:
             self.parar_motores("se dejo de recibir la senal del boton")
         if self.motor and not self.hardware.disponible(self.motor["seccion"]):
             self.parar_motores("se perdio la conexion con el ESP32")
+        self.atender_vuelta(t)
         if self.titular and t - self.ultimo_contacto(self.titular) > TIEMPO_LIBERAR:
             self.liberar(f"{self.titular} sin conexion")
         if self.solicitud and t - self.solicitud["creada"] > ESPERA_SOLICITUD:
@@ -435,6 +537,10 @@ def accion_altura(c, d, s, t):
     if s["rol"] != "dev":
         return False, "Solo el perfil Desarrollador puede cambiar la altura entre automático y manual o calibrar sus pasos."
     accion = d.get("accion")
+    if accion in ("volver_si", "volver_no"):
+        return c.cambiar_volver(s["usuario"], accion == "volver_si")
+    if accion == "cancelar_vuelta":
+        return c.cancelar_vuelta(s["usuario"])
     if accion not in ("centro", "arriba", "abajo", "borrar", "manual", "auto"):
         return False, None
     return c.ajustar_altura(s["usuario"], accion)

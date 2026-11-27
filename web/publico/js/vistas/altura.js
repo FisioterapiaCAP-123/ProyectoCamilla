@@ -53,4 +53,10 @@ export function iniciarAltura() {
       if (radio.checked) mandar(radio.value, 'modoMensajeAltura');
     });
   });
+  // "Volver al centro sola": lo que vale es lo que diga el servidor en la proxima consulta
+  const volver = porId('volverAltura');
+  volver.addEventListener('change', () => {
+    volver.disabled = true;
+    mandar(volver.checked ? 'volver_si' : 'volver_no', 'pasosMensaje');
+  });
 }

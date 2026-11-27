@@ -59,6 +59,7 @@ export function recibir(e) {
     recibirSensores(e.hardware.sensores || {});
     recibirAltura(e.hardware.altura || null);
   }
+  if (e.vuelta_altura) recibirVuelta(e.vuelta_altura);
 
   // El administrador puede cambiar el rol mientras la pagina esta abierta
   if (e.rol !== sesion.rol) aplicarRol(e.rol);
@@ -106,6 +107,16 @@ function recibirAltura(altura) {
   if (resumen(antes) !== resumen(altura)) registrar('← altura: ' + resumen(altura));
   if (JSON.stringify(antes) === JSON.stringify(altura)) return;
   panel.altura = altura;
+  pintar();
+}
+
+/* "Volver al centro sola": el interruptor y cuando empieza o termina la vuelta van al registro */
+function recibirVuelta(vuelta) {
+  const antes = panel.vuelta;
+  if (antes.activa !== vuelta.activa) registrar('← vuelta sola al centro: ' + (vuelta.activa ? 'prendida' : 'apagada'));
+  if (antes.volviendo !== vuelta.volviendo) registrar('← altura ' + (vuelta.volviendo ? 'volviendo sola al centro' : 'dejó de volver al centro'));
+  if (JSON.stringify(antes) === JSON.stringify(vuelta)) return;
+  panel.vuelta = vuelta;
   pintar();
 }
 

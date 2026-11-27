@@ -22,6 +22,13 @@
         <span class="small text-danger w-100" id="modoMensajeAltura"></span>
       </div>
       <div class="alert py-2 px-3 mb-0 small d-none" id="avisoAltura" role="status"></div>
+      <!-- "Volver al centro sola" (vistas/altura.js): la cuenta atras y la vuelta las ve todo el mundo;
+           el boton para quedarse, solo el desarrollador que tiene el control -->
+      <div class="alert alert-primary py-2 px-3 mb-0 small d-flex align-items-center gap-2 flex-wrap d-none" id="vueltaAltura" role="status">
+        <span class="fw-semibold" id="vueltaTexto"></span>
+        <button type="button" class="btn btn-sm btn-primary ms-auto tipo-titulo text-uppercase fw-semibold d-none"
+                id="btnQuedarseAltura" data-altura="cancelar_vuelta">Detener aquí</button>
+      </div>
 
       <div class="row g-2">
         <div class="col-6">
@@ -98,6 +105,11 @@
           <div class="col-6"><button type="button" class="btn btn-outline-primary w-100 tipo-titulo text-uppercase fw-semibold" data-altura="abajo">Guardar tope de abajo</button></div>
           <div class="col-6"><button type="button" class="btn btn-outline-primary w-100 tipo-titulo text-uppercase fw-semibold" data-altura="arriba">Guardar tope de arriba</button></div>
         </div>
+        <div class="form-check form-switch mt-3 mb-0">
+          <input class="form-check-input" type="checkbox" role="switch" id="volverAltura">
+          <label class="form-check-label small fw-semibold" for="volverAltura">Volver al centro sola, 7 s después del último botón</label>
+        </div>
+        <p class="small text-body-secondary mb-0">Solo mientras un desarrollador tiene el control. Se apaga cada vez que se reinicia el servidor.</p>
         <p class="small fw-semibold mb-0 mt-2" id="pasosEstado" aria-live="polite"></p>
         <p class="small text-danger mb-0 mt-1" id="pasosMensaje"></p>
       </div>

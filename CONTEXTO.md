@@ -90,9 +90,10 @@ compi.txt     (sin seguimiento en git) código del compañero. TIENE LA CLAVE DE
 | `ALTURA_STEPPER` | `True` | Crea la sección `altura` |
 | `ALTURA_STEP`, `ALTURA_DIR`, `ALTURA_EN` | 25, 33, 26 | DRV8825: STP, DIR y EN (EN activo en bajo; antes 13) |
 | `SUBIR_CON_DIR` | 1 | Si "Subir" baja, se pone 0 |
-| `PASOS_INICIO`, `PASOS_ACELERACION`, `PASOS_VELOCIDAD` | 250, 1500, 1000 | Arranca a 250 pasos/s y llega a 1000 en 0.5 s (5 vueltas/s en paso completo). A 1000 de golpe un NEMA 17 zumba y no arranca. Si zumba o se atora con carga: 800 o 600. |
+| `PASOS_INICIO`, `PASOS_ACELERACION`, `PASOS_VELOCIDAD` | 250, 1500, 500 | Arranca a 250 pasos/s y llega a 500 en unos 0.2 s (2.5 vueltas/s en paso completo). Hasta el 26-11 era 1000 (5 vueltas/s): en la camilla iba demasiado rápido. A 1000 de golpe un NEMA 17 zumba y no arranca. |
 | `MANTENER_FUERZA` | `True` | Quieto, el stepper sigue sujetando (EN siempre en 0) y se calienta |
-| `ALTURA_LENTO_PASOS` | 400 | A menos de estos pasos de un tope la altura frena a `PASOS_INICIO` (frenar desde 1000 toma unos 310 pasos) |
+| `ALTURA_LENTO_PASOS` | 100 (desde el 27-11; antes 400 y luego 150) | A menos de estos pasos de un tope (o del centro, si vuelve sola) la altura frena a `ALTURA_LENTO_VELOCIDAD`. Frenar de 500 a 50 toma unos 83 pasos: con una zona de menos de 90 llega rápido al tope (con 50, a unos 320 pasos/s) |
+| `ALTURA_LENTO_VELOCIDAD` | 50 (desde el 27-11; antes era `PASOS_INICIO`, 250, y luego 120) | Pasos/s cerca de un tope o del centro (vuelta sola), y siempre con topes pero sin centro. Si arranca ya dentro de la zona lenta, arranca a esta velocidad |
 | `ARCHIVO_ALTURA` | `altura.json` | Pasos, centro, topes y modo de la altura, en la memoria del ESP32; cargar `main.py` no lo borra |
 | `PIERNAS_MPU`, `CABEZA_MPU` | `0x68`, `None` | Dirección del MPU6050 de cada sección (`None` = sin sensor). Los dos con AD0 a GND, porque cada uno va en su bus: cabeza será `0x68` al conectarse (con AD0 a VCC, `0x69`). |
 | `PIERNAS_SCL`, `PIERNAS_SDA`, `PIERNAS_I2C_HZ` | 21, 19, 50000 | I2C 0, solo para el MPU de piernas (J7). Si falla con el cable puesto, 20000. |
@@ -119,6 +120,7 @@ compi.txt     (sin seguimiento en git) código del compañero. TIENE LA CLAVE DE
 
 ```text
 Raspberry -> ESP32   M <seccion> 1    extender o subir; se repite cada 200 ms
+                     M altura 0       la altura va sola al centro (paso 0) y para ahi; tambien se repite
                      M <seccion> -1   retraer o bajar
                      S <seccion>      detener esa sección (el servidor no la usa)
                      X                detener todo
@@ -148,10 +150,12 @@ ESP32 -> Raspberry   E altura=detenido cabeza=extendiendo piernas=contrayendo fi
 
 - **Línea `E`:** `pasos_altura=120 centro_altura=si|no topes_altura=-4000:3800|-:3800|no modo_altura=auto|manual`.
 - **Centro y topes:** `T altura centro` pone la cuenta en 0 y la da por buena. `T altura arriba` y `abajo` guardan el tope donde está (arriba solo con pasos ≥ 1, abajo con ≤ −1, y con centro). `T altura borrar` quita los dos. Solo con la altura quieta y en automático.
-- **Con centro y un tope:** frena a `PASOS_INICIO` a menos de `ALTURA_LENTO_PASOS` y se detiene en el tope (`Seccion.en_final` le pregunta al stepper, igual que a un final de carrera). Sin centro pero con topes, va siempre despacio.
+- **Con centro y un tope:** frena a `ALTURA_LENTO_VELOCIDAD` (50 pasos/s) a menos de `ALTURA_LENTO_PASOS` y se detiene en el tope (`Seccion.en_final` le pregunta al stepper, igual que a un final de carrera). Sin centro pero con topes, va siempre a `ALTURA_LENTO_VELOCIDAD`.
+- **Medido en la camilla (27-11, 500 pasos/s):** un toque de 50 ms da unos 5 pasos; 100 ms, unos 18; 200 ms, unos 55; 300 ms, unos 105; 500 ms, unos 200 (1 vuelta). Subir y bajar dan lo mismo (±4) directo por USB; por el servidor varían unos ±15 pasos. Cada arranque tarda 60–90 ms (guarda `altura.json` antes). Tras todos los toques, `M altura 0` la dejó en −1.
 - **Memoria:** guarda `altura.json` al parar, y al arrancar marca que se mueve. Si se reinicia o se corta la luz en marcha, al volver queda sin centro.
 - **Manual (`A altura manual`):** para la altura, suelta el NEMA (EN = 1) y no obedece `M altura`. Como el pedal la mueve por fuera, la cuenta deja de valer: al volver a automático (EN = 0) queda sin centro. El modo se guarda y sigue tras reiniciar.
-- La rampa ahora también frena; cambia la frecuencia de a 25 pasos/s.
+- La rampa ahora también frena; cambia la frecuencia de a 25 pasos/s. Hasta el 27-11, al entrar en la zona lenta caía de golpe a la velocidad lenta (a velocidad pareja la rampa acumulaba tiempo); corregido en `Stepper.actualizar`.
+- **Vuelta sola al centro (`M altura 0`, 26-11):** con centro y en automático, el ESP32 elige el sentido hacia el 0 con la primera orden, frena a menos de `ALTURA_LENTO_PASOS` del 0 y para ahí, como en un tope (`Stepper.objetivo`). Mientras siga la orden se queda quieta. `M altura 1` o `-1` la cortan y manda el botón; `S`, `X` o 500 ms sin orden la olvidan. Sin centro o en manual no se mueve.
 
 **No hace:** leer finales de la cabeza (previstos en 4 y 32), medir corriente, limitar el tiempo de marcha ni parar por ángulo. La altura no lleva finales de carrera (decisión del 24-11). Los estados y `final_piernas` de la línea `E` llegan al servidor, pero el servidor solo usa los nombres de las secciones.
 
@@ -195,7 +199,7 @@ ESP32 -> Raspberry   E altura=detenido cabeza=extendiendo piernas=contrayendo fi
 
 | Ruta | Sesión | Qué hace |
 |---|---|---|
-| `GET /api/estado` | Opcional (`X-Sesion`) | `usuario`, `nombre`, `rol`, `control {titular, usuario}`, `paro`, `simulacion`, `hardware {conectado, secciones, sensores {piernas: {angulo, estado}}, altura {pasos, centro, topes {abajo, arriba}, modo} o null}`, `solicitud` (solo al titular), `respuesta` (solo a quien pidió, una vez) y `telemetria {piernas: 12.5, altura: 37.8}` (secciones con sensor calibrado; la altura de 0 a 100 entre los topes, solo con centro, los dos topes y en automático) |
+| `GET /api/estado` | Opcional (`X-Sesion`) | `usuario`, `nombre`, `rol`, `control {titular, usuario}`, `paro`, `simulacion`, `hardware {conectado, secciones, sensores {piernas: {angulo, estado}}, altura {pasos, centro, topes {abajo, arriba}, modo} o null}`, `solicitud` (solo al titular), `respuesta` (solo a quien pidió, una vez), `vuelta_altura {activa, volviendo, en}` (interruptor, si vuelve ahora y segundos que faltan o null) y `telemetria {piernas: 12.5, altura: 37.8}` (secciones con sensor calibrado; la altura de 0 a 100 entre los topes, solo con centro, los dos topes y en automático) |
 | `GET /` y archivos | No | La página compuesta; de `publico/` solo `.css`, `.js` y `.woff2` |
 | `POST /api/login`, `/api/registro` | No | Abre una sesión. El registro crea un fisioterapeuta. `recordar: true` en el login devuelve además una `llave` para el equipo. Un login sin `recordar` anula las llaves de otros equipos del perfil. |
 | `POST /api/reanudar {llave}` | No | Equipo recordado: abre sesión sin contraseña. Vale 30 días desde el último uso. La anulan entrar desde otro equipo, "Salir", una contraseña nueva, desactivar o borrar el perfil. |
@@ -203,7 +207,7 @@ ESP32 -> Raspberry   E altura=detenido cabeza=extendiendo piernas=contrayendo fi
 | `POST /api/logout` | Sí | Cierra la sesión y libera el control si lo tenía |
 | `POST /api/control/tomar`, `solicitar`, `cancelar`, `responder {id, aceptar}`, `liberar` | Sí | Control |
 | `POST /api/mover {seccion, dir, n}`, `/api/detener {seccion, n}` | Sí | Motor continuo. `dir` es 1 o −1. Un `detener` nunca se descarta. |
-| `POST /api/altura {accion}` | Sí, desarrollador | `centro`, `arriba`, `abajo`, `borrar` (pasos del NEMA) o `manual`, `auto` (modo). Rechaza con la altura en marcha (salvo manual, que la para), los topes sin centro o en manual, el de arriba bajo el centro y el de abajo sobre él. Se anota en el registro. |
+| `POST /api/altura {accion}` | Sí, desarrollador | `centro`, `arriba`, `abajo`, `borrar` (pasos del NEMA) o `manual`, `auto` (modo). Rechaza con la altura en marcha o volviendo al centro (salvo manual, que la para), los topes sin centro o en manual, el de arriba bajo el centro y el de abajo sobre él. `volver_si` / `volver_no`: interruptor "Volver al centro sola"; `cancelar_vuelta`: "Detener aquí" (corta la vuelta o la cuenta atrás hasta el próximo botón). Se anota en el registro. |
 | `POST /api/calibrar {seccion, posicion}` | Sí, desarrollador | `plano` o `subido` para el MPU de cabeza o piernas. Rechaza si la sección se mueve o si el sensor está en `falla`. Se anota en el registro. (`/api/paso` se quitó: ninguna sección lo usaba.) |
 | `POST /api/depuracion` | Sí, desarrollador | Modo, puerto del ESP32 y hace cuánto respondió, última orden enviada y última línea `E` recibida, sensores, motor, paro, titular, sesiones (usuario, rol, IP) y las últimas 60 líneas del registro del servidor. Otro rol: 403. |
 | `POST /api/pacientes/lista`, `guardar`, `borrar` | Admin | Registros de pacientes |
@@ -265,7 +269,7 @@ Sin compilación: el servidor junta las plantillas y el navegador carga módulos
 | `main.js`, `utilidades.js` | Arranque (conecta los módulos) y ayudas (`porId`, `bajarArchivo`...) |
 | `api/cliente.js`, `sondeo.js`, `ordenes.js`, `admin.js` | Peticiones, consulta cada 300 ms, órdenes y pedidos de administración |
 | `vistas/calibrar.js` | Panel "Calibrar" de cabeza y piernas (solo desarrollador), dentro de la tarjeta porque entre plano y subido hay que mover la sección |
-| `vistas/altura.js` | Altura: selector Automático / Manual (pedal) y panel "Pasos" (centro, topes y pasos en vivo), solo desarrollador. "Borrar topes" se toca dos veces. |
+| `vistas/altura.js` | Altura: selector Automático / Manual (pedal) y panel "Pasos" (centro, topes y pasos en vivo), solo desarrollador. "Borrar topes" se toca dos veces. Interruptor "Volver al centro sola" y botón "Detener aquí" de la cuenta atrás. |
 | `camilla/movimiento.js` | Botón sostenido, estimación, "Ir a" y paro |
 | `camilla/mandos.js` | Eventos de los botones, Esc, Plano y Bloquear |
 | `camilla/telemetria.js` | `aplicarAngulos` y la API `window.camilla` |
@@ -328,7 +332,7 @@ Detener un rato: `sudo systemctl stop camilla-pagina camilla-red` (al reiniciar 
 |---|---|---|---|---|
 | Cabeza (2) | ECO-WORTHY 3000N | 150 mm (6") | 5 mm/s | 3 A máxima |
 | Piernas (2) | 1500N | 250 mm (10") | 10 mm/s | 4 A |
-| Altura | NEMA 17 (200 pasos/vuelta) con DRV8825 | Según el husillo (sin medir) | 1000 pasos/s = 5 vueltas/s | Según la etiqueta; Vref = corriente / 2 |
+| Altura | NEMA 17 (200 pasos/vuelta) con DRV8825 | Según el husillo (sin medir) | 500 pasos/s = 2.5 vueltas/s (antes 1000) | Según la etiqueta; Vref = corriente / 2 |
 
 - No mezclar modelos en una sección: uno iría al doble de velocidad y torcería la estructura.
 - El tope interno protege al actuador, no a la estructura. Montado, hay que soltar antes de que la camilla llegue a su límite.
@@ -509,7 +513,7 @@ Detener un rato: `sudo systemctl stop camilla-pagina camilla-red` (al reiniciar 
 - Instalar los finales de piernas en 17 y 16 (C a GND, NC al GPIO), poner `PIERNAS_FINAL_ARRIBA = 17` y `PIERNAS_FINAL_ABAJO = 16`, cargar `main.py` y probar: al arrancar debe decir `# finales de piernas: no`.
 - Probar la cabeza con su BTS7960 desde la página (por USB ya se movió el 26-11): "extender" tiene que subirla.
 - Paro físico: hongo con contactor que corte la fuente de motores.
-- Altura con carga: mantener Subir 5 s y medir los mm. Si zumba, se atora o baja solo, `PASOS_VELOCIDAD` a 800 o 600.
+- Altura con carga: mantener Subir 5 s y medir los mm. Si zumba, se atora o baja solo, bajar `PASOS_VELOCIDAD` (hoy 500).
 - Calibrar la estimación de Cabeza y Piernas cuando estén montadas.
 - Contar los errores USB con motores, en la red Camilla.
 - Proteger `camilla.db` contra cortes (la Raspberry arranca desde una memoria USB): copias o UPS. Reloj DS3231.
@@ -676,7 +680,8 @@ Privadas de la cuenta del usuario. Algunas muestran planes viejos (por ejemplo, 
 - El ángulo real llega en `telemetria` y `aplicarAngulos` lo aplica siempre; `darPaso` no estima una sección con sensor. El estado de cada sensor viene aparte, en `hardware.sensores`, y no se compara con el resto de `hardware` (si no, el registro anotaría cada lectura).
 - **Altura bloqueada** (`bloqueoAltura` en `estado.js`, `bloqueo_altura` en `servidor.py`): en manual nadie la mueve; con topes y sin centro solo el desarrollador (despacio). `puedeMover('altura')` lo revisa y el servidor rechaza `/api/mover`. Cambiar el modo, el centro o los topes es solo del desarrollador.
 - Con centro y los dos topes, `conSensor('altura')` es verdadero: la barra de la altura muestra la posición real que manda el servidor en `telemetria.altura` y la página deja de estimarla.
-- El Simulador también simula la altura: 800 pasos/s, con centro y topes −4000 / 4000 al arrancar.
+- El Simulador también simula la altura: 450 pasos/s (el ESP32 llega a 500), con centro y topes −4000 / 4000 al arrancar, y `M altura 0`.
+- **Volver al centro sola** (26-11, pedido del usuario): interruptor en el panel Pasos, solo del desarrollador, apagado al arrancar el servidor (`Camilla.volver_altura`, no se guarda). Prendido, y solo mientras un desarrollador tiene el control, la altura vuelve sola al paso 0 `VUELTA_ESPERA` (7 s; el 26-11 eran 5) después del último botón (mover, ajuste de la altura o prender el interruptor). El servidor repite `M altura 0` (`atender_vuelta`, desde `vigilar`, cada 0.5 s) y termina al llegar a ±`VUELTA_CENTRO` pasos o al cruzar el 0. Se corta con cualquier botón de mover, "Detener aquí", el PARO, el cambio de control, pasar a manual, perder el ESP32 o si los pasos no cambian en 2 s. Una vuelta por pulsación: tras terminar o cortarse hace falta otro botón. La cuenta atrás ("Vuelve sola al centro en 3 s") y la vuelta las ven todas las páginas. Es movimiento sin nadie apretando: por eso solo con el desarrollador.
 - El Simulador (`--simulador`) también simula los sensores de cabeza y piernas, calibrados: 3°/s y 4°/s mientras se mueven, con su calibración.
 - Las reglas de `basedatos.py`, `ui/formularios.js`, `vistas/acceso.js` y `vistas/pacientes.js` se cambian juntas. Los límites de cada sección ya solo están en `CONFIG` (`config.js`).
 - `CONFIG.altura.numerica = true` rompe la página con un `TypeError`: la altura no tiene esos elementos en el HTML.
