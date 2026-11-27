@@ -22,7 +22,8 @@ TIEMPO_LIBERAR = 10  # segundos sin noticias de quien tiene el control para libe
 ESPERA_SOLICITUD = 35  # segundos que dura un pedido de control sin respuesta (las paginas cuentan 30)
 HOMBRE_MUERTO = 1.0  # segundos sin "mover" para parar un motor continuo (la pagina lo repite mientras se mantiene el boton)
 # "Volver al centro sola" (interruptor del perfil Desarrollador): la altura vuelve al paso 0
-VUELTA_ESPERA = 7  # segundos desde la ultima pulsacion de un boton (hasta el 27-11, 5)
+VUELTA_ESPERA = 0.5  # segundos desde que se suelta el ultimo boton (26-11: 5; 27-11: 7 y luego 0.5)
+VUELTA_REVISAR = 0.1  # cada cuanto se revisa la vuelta, para que empiece a tiempo (lo demas de vigilar, cada 0.5 s)
 VUELTA_CENTRO = 3  # a esta distancia del 0 (en pasos) ya esta en el centro
 VUELTA_TRABADA = 2.0  # segundos sin que cambien los pasos: se cancela
 VUELTA_MAXIMA = 120  # segundos: una vuelta mas larga se cancela
@@ -265,6 +266,7 @@ class Camilla:
     def detener(self, usuario, seccion):
         if usuario == self.titular and self.motor and self.motor["seccion"] == seccion:
             self.parar_motores(f"{usuario} solto el boton")
+            self.ultima_pulsacion = time.monotonic()  # VUELTA_ESPERA cuenta desde que se suelta, no desde la ultima repeticion
         return True, None
 
     def calibrar(self, usuario, seccion, posicion):
@@ -498,10 +500,16 @@ camilla = Camilla()
 
 
 def vigilar():
+    """Cada VUELTA_REVISAR s atiende la vuelta de la altura; cada 0.5 s, todo lo demas (Camilla.vigilar)."""
+    vueltas = 0
     while True:
-        time.sleep(0.5)
+        time.sleep(VUELTA_REVISAR)
+        vueltas += 1
         with candado:
-            camilla.vigilar()
+            if vueltas % round(0.5 / VUELTA_REVISAR) == 0:
+                camilla.vigilar()
+            else:
+                camilla.atender_vuelta(time.monotonic())
 
 
 def seccion_y_direccion(datos, campo):
