@@ -2,7 +2,7 @@
 
 Se guarda en la placa como main.py con Thonny y arranca solo al recibir energia.
 Recibe las ordenes de la Raspberry por el cable USB y mueve las piernas con un
-puente H BTS7960, la cabeza con un L298N y la altura con un motor paso a paso
+puente H BTS7960, la cabeza con otro BTS7960 y la altura con un motor paso a paso
 (NEMA 17 con driver DRV8825). Con MODULO = "reles", solo la cabeza, con el
 modulo de 4 reles.
 
@@ -68,7 +68,8 @@ A cada orden valida responde con el estado de todas las secciones:
 
 Seguridad:
     - Una seccion se detiene sola si pasan LIMITE_SIN_ORDEN_MS sin recibir su M.
-    - Piernas se detiene al tocar su final de carrera (PIERNAS_FINAL_ARRIBA/ABAJO).
+    - Piernas se detiene al tocar su final de carrera (PIERNAS_FINAL_ARRIBA/ABAJO), cuando
+      esten instalados (26-11: todavia no; sin finales, final_piernas no sale en la linea E).
     - Un MPU que falla no detiene nada: los motores siguen y la linea E dice "falla".
     - Con la primera orden de la Raspberry se activa el watchdog: si el programa
       se cuelga, la placa se reinicia y los reles quedan apagados.
@@ -84,16 +85,17 @@ import machine
 from machine import I2C, PWM, Pin
 
 # ---------- CONFIGURACION ----------
-MODULO = "puente"           # "puente": piernas (BTS7960) y cabeza (L298N) | "reles": cabeza con 4 reles
+MODULO = "puente"           # "puente": piernas y cabeza, cada una con su BTS7960 | "reles": cabeza con 4 reles
 PIN_EXTENDER = 13           # piernas, BTS7960: RPWM (placa J5; antes 26)
 PIN_RETRAER = 27            # piernas, BTS7960: LPWM
 PIN_HABILITAR = None        # piernas, BTS7960: R_EN+L_EN; None si van a 3.3 V
-PIERNAS_FINAL_ARRIBA = 17   # piernas: final de carrera al extender (subir); None si no esta conectado
-PIERNAS_FINAL_ABAJO = 16    # piernas: final de carrera al retraer (bajar); None si no esta conectado
+PIERNAS_FINAL_ARRIBA = None  # piernas: final al extender (subir), GPIO 17 cuando se instale; None si no esta
+PIERNAS_FINAL_ABAJO = None   # piernas: final al retraer (bajar), GPIO 16 cuando se instale. Sin finales
+                             #   conectados los pines leen "los dos tocados" (falla) y piernas no se mueve
 FINAL_ACTIVO = 1            # lo que lee el pin con el final TOCADO: 1 = contacto NC a GND (si se corta
                             #   el cable tambien para); 0 = contacto NO a GND
-CABEZA_EXTENDER = 22        # cabeza: RPWM del BTS7960 (placa J6) o IN1 del L298N (antes 18)
-CABEZA_RETRAER = 23         # cabeza: LPWM del BTS7960 (placa J6) o IN2 del L298N (antes 19)
+CABEZA_EXTENDER = 22        # cabeza, BTS7960: RPWM (placa J6; antes 18)
+CABEZA_RETRAER = 23         # cabeza, BTS7960: LPWM (antes 19)
 VELOCIDAD = 100             # puente H: potencia en % (0 a 100)
 FRECUENCIA_PWM = 1000       # puente H: Hz
 ALTURA_STEPPER = True       # altura con motor paso a paso; False si no esta conectado
@@ -491,8 +493,8 @@ class Seccion:
 
 
 # Una entrada por seccion. Los nombres deben ser los de la pagina: altura, cabeza, piernas.
-# Con puente H, los dos actuadores de piernas van en paralelo en el mismo BTS7960.
-# La cabeza tiene por ahora un solo actuador, en el canal A del L298N.
+# Con puente H, los dos actuadores de cada seccion van en paralelo en su BTS7960
+# (piernas y cabeza; la cabeza paso del L298N a su BTS7960 el 26-11).
 if MODULO == "reles":
     SECCIONES = {
         "cabeza": Seccion([ParReles(26, 27), ParReles(25, 33)]),
